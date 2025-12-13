@@ -42,7 +42,7 @@ export async function initDB() {
   if (db) return db;
 
   const SQL = await initSqlJs({
-    locateFile: (file: any) => `https://sql.js.org/dist/${file}`,
+    locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
   });
   const dbData = await loadDbFromIndexedDB();
   if (dbData) {
@@ -68,7 +68,14 @@ export function createTables() {
   db.run(query);
 }
 
-export function insertTrack(track: any) {
+export interface Track {
+  title: string;
+  artist: string;
+  album: string;
+  track: string;
+}
+
+export function insertTrack(track: Track) {
   if (!db) return;
   const stmt = db.prepare(
     "INSERT INTO tracks (title, artist, album, track) VALUES (?, ?, ?, ?)"
@@ -78,22 +85,24 @@ export function insertTrack(track: any) {
 }
 
 export function getAlbums() {
-    if (!db) return [];
-    const res = db.exec("SELECT DISTINCT album FROM tracks ORDER BY album");
-    if (res.length === 0) {
-        return [];
-    }
-    return res[0].values.map((row: any) => row[0]);
+  if (!db) return [];
+  const res = db.exec("SELECT DISTINCT album FROM tracks ORDER BY album");
+  if (res.length === 0) {
+    return [];
+  }
+  return res[0].values.map((row) => row?.[0] as string);
 }
 
 export function getTracksByAlbum(albumName: string) {
-    if (!db) return [];
-    const stmt = db.prepare("SELECT title, artist, album, track FROM tracks WHERE album = ? ORDER BY CAST(track AS INTEGER)");
-    stmt.bind([albumName]);
-    const tracks: any[] = [];
-    while (stmt.step()) {
-        tracks.push(stmt.getAsObject());
-    }
-    stmt.free();
-    return tracks;
+  if (!db) return [];
+  const stmt = db.prepare(
+    "SELECT title, artist, album, track FROM tracks WHERE album = ? ORDER BY CAST(track AS INTEGER)"
+  );
+  stmt.bind([albumName]);
+  const tracks: Track[] = [];
+  while (stmt.step()) {
+    tracks.push(stmt.getAsObject() as unknown as Track);
+  }
+  stmt.free();
+  return tracks;
 }
