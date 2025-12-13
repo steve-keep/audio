@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   initDB,
   insertTrack,
@@ -27,6 +27,7 @@ export default function Home() {
   const [isApiSupported, setIsApiSupported] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanningProgress, setScanningProgress] = useState(0);
+  const workerRef = useRef<Worker>();
 
   useEffect(() => {
     setIsApiSupported(
@@ -36,6 +37,36 @@ export default function Home() {
       const albumsFromDB = getAlbums().map((name: string) => ({ name, tracks: [] }));
       setAlbums(albumsFromDB);
     });
+
+    workerRef.current = new Worker(
+      new URL("./scanner.worker.ts", import.meta.url)
+    );
+    workerRef.current.onmessage = async (
+      event: MessageEvent<{ type: string; payload: any }>
+    ) => {
+      if (event.data.type === "progress") {
+        setScanningProgress(event.data.payload);
+      } else if (event.data.type === "complete") {
+        const tracks = event.data.payload as Track[];
+        for (const track of tracks) {
+          insertTrack(track);
+        }
+        await saveDbToIndexedDB();
+        const albumsFromDB = getAlbums().map((name: string) => ({
+          name,
+          tracks: [],
+        }));
+        setAlbums(albumsFromDB);
+        setIsScanning(false);
+      } else if (event.data.type === "error") {
+        console.error(event.data.payload);
+        setIsScanning(false);
+      }
+    };
+
+    return () => {
+      workerRef.current?.terminate();
+    };
   }, []);
 
   const handleDirectorySelection = async () => {
@@ -43,58 +74,7 @@ export default function Home() {
       setIsScanning(true);
       setScanningProgress(0);
       const directoryHandle = await window.showDirectoryPicker();
-      const files: File[] = [];
-      const processDirectory = async (directoryHandle: FileSystemDirectoryHandle) => {
-        for await (const entry of directoryHandle.values()) {
-          if (entry.kind === "file") {
-            const lowerCaseName = entry.name.toLowerCase();
-            if (
-              lowerCaseName.endsWith(".mp3") ||
-              lowerCaseName.endsWith(".flac")
-            ) {
-              files.push(await entry.getFile());
-            }
-          } else if (entry.kind === "directory") {
-            await processDirectory(entry);
-          }
-        }
-      };
-
-      await processDirectory(directoryHandle);
-
-      const jsmediatags = (await import("jsmediatags")).default;
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        await new Promise<void>((resolve) => {
-          jsmediatags.read(file, {
-            onSuccess: (tag) => {
-              const tags = tag.tags;
-              insertTrack({
-                title: tags.title || "Unknown Title",
-                artist: tags.artist || "Unknown Artist",
-                album: tags.album || "Unknown Album",
-                track: tags.track || "0",
-              });
-              resolve();
-            },
-            onError: (error) => {
-              console.error(error);
-              insertTrack({
-                title: file.name,
-                artist: "Unknown Artist",
-                album: "Unknown Album",
-                track: "0",
-              });
-              resolve();
-            },
-          });
-        });
-        setScanningProgress(((i + 1) / files.length) * 100);
-      }
-      await saveDbToIndexedDB();
-      const albumsFromDB = getAlbums().map((name: string) => ({ name, tracks: [] }));
-      setAlbums(albumsFromDB);
-      setIsScanning(false);
+      workerRef.current?.postMessage(directoryHandle);
     } catch (error) {
       console.error("Error selecting directory:", error);
       setIsScanning(false);
