@@ -5,6 +5,7 @@ import {
   initDB,
   insertTrack,
   saveDbToIndexedDB,
+  exportDB,
 } from "../database";
 
 interface Track {
@@ -64,6 +65,19 @@ export default function Settings() {
     }
   };
 
+  const handleBackup = () => {
+    const data = exportDB();
+    if (data) {
+      const blob = new Blob([data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "audio-indexer.db";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
   return (
     <main>
       <h1>Settings</h1>
@@ -77,6 +91,8 @@ export default function Settings() {
       {isScanning && (
         <progress value={scanningProgress} max="100"></progress>
       )}
+      <hr />
+      <button onClick={handleBackup}>Backup Database</button>
     </main>
   );
 }

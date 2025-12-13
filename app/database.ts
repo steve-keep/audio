@@ -189,3 +189,8 @@ export function getTracksByAlbum(albumName: string) {
   stmt.free();
   return tracks;
 }
+
+export function exportDB(): Uint8Array | null {
+  if (!db) return null;
+  return db.export();
+}
