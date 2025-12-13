@@ -1,0 +1,3 @@
+- Always run tests when working on a thing before creating a PR
+- Always make sure that the software builds before creating a PR
+- When creating a PR, set it to ready for review
