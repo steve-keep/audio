@@ -6,6 +6,7 @@ import {
   insertTrack,
   saveDbToIndexedDB,
   exportDB,
+  restoreDB,
 } from "../database";
 
 interface Track {
@@ -19,6 +20,7 @@ export default function Settings() {
   const [isApiSupported, setIsApiSupported] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanningProgress, setScanningProgress] = useState(0);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
@@ -78,6 +80,21 @@ export default function Settings() {
     }
   };
 
+  const handleRestore = async () => {
+    if (restoreFile) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        if (event.target?.result) {
+          const data = new Uint8Array(event.target.result as ArrayBuffer);
+          await restoreDB(data);
+          alert("Database restored successfully. The application will now reload.");
+          window.location.reload();
+        }
+      };
+      reader.readAsArrayBuffer(restoreFile);
+    }
+  };
+
   return (
     <main>
       <h1>Settings</h1>
@@ -93,6 +110,14 @@ export default function Settings() {
       )}
       <hr />
       <button onClick={handleBackup}>Backup Database</button>
+      <hr />
+      <input
+        type="file"
+        onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+      />
+      <button onClick={handleRestore} disabled={!restoreFile}>
+        Restore Database
+      </button>
     </main>
   );
 }

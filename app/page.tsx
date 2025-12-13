@@ -1,78 +1,135 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { initDB, getArtists, getArtist, insertArtist } from "./database";
-import { API_KEY } from "./constants";
+import { useState, useEffect, useRef } from "react";
+import {
+  initDB,
+  insertTrack,
+  getAlbums,
+  getTracksByAlbum,
+  saveDbToIndexedDB,
+} from "./database";
 
-interface Artist {
+interface Track {
+  title: string;
+  artist: string;
+  album: string;
+  track: string;
+}
+
+interface Album {
   name: string;
-  imageUrl: string;
+  tracks: Track[];
 }
 
 export default function Home() {
-  const [artists, setArtists] = useState<Artist[]>([]);
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [expandedAlbum, setExpandedAlbum] = useState<string | null>(null);
+  const [isApiSupported, setIsApiSupported] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanningProgress, setScanningProgress] = useState(0);
+  const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
-    const fetchArtists = async () => {
-      await initDB();
-      const artistNames = getArtists();
-      const artistData = await Promise.all(
-        artistNames.map(async (name) => {
-          let artist = getArtist(name);
-          if (artist && artist.imageUrl) {
-            return artist;
-          }
+    setIsApiSupported(
+      typeof window !== "undefined" && "showDirectoryPicker" in window
+    );
+    initDB().then(() => {
+      const albumsFromDB = getAlbums().map((name: string) => ({ name, tracks: [] }));
+      setAlbums(albumsFromDB);
+    });
 
-          try {
-            const response = await fetch(
-              `https://www.theaudiodb.com/api/v1/json/${API_KEY}/search.php?s=${name}`
-            );
-            const data = await response.json();
-            const imageUrl = data.artists?.[0]?.strArtistThumb || "/placeholder.jpg";
-            artist = { name, imageUrl };
-            insertArtist(artist);
-            return artist;
-          } catch (error) {
-            console.error("Error fetching artist image:", error);
-            return { name, imageUrl: "/placeholder.jpg" };
-          }
-        })
-      );
-      setArtists(artistData);
+    workerRef.current = new Worker(
+      new URL("./scanner.worker.ts", import.meta.url)
+    );
+    workerRef.current.onmessage = async (
+      event: MessageEvent<{ type: string; payload: any }>
+    ) => {
+      if (event.data.type === "progress") {
+        setScanningProgress(event.data.payload);
+      } else if (event.data.type === "complete") {
+        const tracks = event.data.payload as Track[];
+        for (const track of tracks) {
+          insertTrack(track);
+        }
+        await saveDbToIndexedDB();
+        const albumsFromDB = getAlbums().map((name: string) => ({
+          name,
+          tracks: [],
+        }));
+        setAlbums(albumsFromDB);
+        setIsScanning(false);
+      } else if (event.data.type === "error") {
+        console.error(event.data.payload);
+        setIsScanning(false);
+      }
     };
-    fetchArtists();
+
+    return () => {
+      workerRef.current?.terminate();
+    };
   }, []);
+
+  const handleDirectorySelection = async () => {
+    try {
+      setIsScanning(true);
+      setScanningProgress(0);
+      const directoryHandle = await window.showDirectoryPicker();
+      workerRef.current?.postMessage(directoryHandle);
+    } catch (error) {
+      console.error("Error selecting directory:", error);
+      setIsScanning(false);
+    }
+  };
+
+  const toggleAlbum = (albumName: string) => {
+    if (expandedAlbum === albumName) {
+      setExpandedAlbum(null);
+    } else {
+      const tracks = getTracksByAlbum(albumName);
+      const newAlbums = albums.map((album) =>
+        album.name === albumName ? { ...album, tracks } : album
+      );
+      setAlbums(newAlbums);
+      setExpandedAlbum(albumName);
+    }
+  };
 
   return (
     <main>
-      <h1>Artists</h1>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-          gap: "1rem",
-        }}
-      >
-        {artists.map((artist) => (
-          <Link
-            href={`/artist/${encodeURIComponent(artist.name)}`}
-            key={artist.name}
-            style={{ textDecoration: "none", color: "inherit" }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <img
-                src={artist.imageUrl}
-                alt={artist.name}
-                width="150"
-                height="150"
-                style={{ objectFit: "cover", borderRadius: "8px" }}
-              />
-              <h3>{artist.name}</h3>
-            </div>
-          </Link>
-        ))}
-      </div>
+      <h1>Audio File Indexer</h1>
+      {isApiSupported ? (
+        <button onClick={handleDirectorySelection} disabled={isScanning}>
+          {isScanning ? "Scanning..." : "Select Directory"}
+        </button>
+      ) : (
+        <p>The File System Access API is not supported in your browser.</p>
+      )}
+      {isScanning && (
+        <progress value={scanningProgress} max="100"></progress>
+      )}
+      {albums.length > 0 && (
+        <ul>
+          {albums.map((album) => (
+            <li key={album.name}>
+              <h2
+                onClick={() => toggleAlbum(album.name)}
+                style={{ cursor: "pointer" }}
+              >
+                {album.name}
+              </h2>
+              {expandedAlbum === album.name && (
+                <ul>
+                  {album.tracks.map((track) => (
+                    <li key={track.title}>
+                      {track.track} - {track.title}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </main>
   );
 }

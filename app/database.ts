@@ -1,9 +1,18 @@
-import initSqlJs, { Database } from "sql.js";
+import initSqlJs, { Database, SqlJsStatic } from "sql.js";
 
 let db: Database | null = null;
+let SQL: SqlJsStatic | null = null;
 
 const DB_NAME = "audio-indexer-db";
 const DB_STORE_NAME = "database";
+
+async function initializeSql(): Promise<SqlJsStatic> {
+  if (SQL) return SQL;
+  SQL = await initSqlJs({
+    locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
+  });
+  return SQL;
+}
 
 function openIndexedDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -41,14 +50,12 @@ export async function saveDbToIndexedDB() {
 export async function initDB() {
   if (db) return db;
 
-  const SQL = await initSqlJs({
-    locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
-  });
+  const sql = await initializeSql();
   const dbData = await loadDbFromIndexedDB();
   if (dbData) {
-    db = new SQL.Database(dbData);
+    db = new sql.Database(dbData);
   } else {
-    db = new SQL.Database();
+    db = new sql.Database();
   }
   createTables();
   return db;
@@ -193,4 +200,13 @@ export function getTracksByAlbum(albumName: string) {
 export function exportDB(): Uint8Array | null {
   if (!db) return null;
   return db.export();
+}
+
+export async function restoreDB(data: Uint8Array) {
+  const sql = await initializeSql();
+  if (db) {
+    db.close();
+  }
+  db = new sql.Database(data);
+  await saveDbToIndexedDB();
 }
