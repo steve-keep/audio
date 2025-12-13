@@ -27,7 +27,7 @@ export default function Home() {
   const [isApiSupported, setIsApiSupported] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanningProgress, setScanningProgress] = useState(0);
-  const workerRef = useRef<Worker>();
+  const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
     setIsApiSupported(
