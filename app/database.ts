@@ -210,3 +210,15 @@ export async function restoreDB(data: Uint8Array) {
   db = new sql.Database(data);
   await saveDbToIndexedDB();
 }
+
+export async function deleteDB() {
+  if (db) {
+    db.close();
+    db = null;
+  }
+  return new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(DB_NAME);
+    request.onerror = () => reject("Error deleting database");
+    request.onsuccess = () => resolve();
+  });
+}

@@ -7,6 +7,7 @@ import {
   saveDbToIndexedDB,
   exportDB,
   restoreDB,
+  deleteDB,
 } from "../database";
 
 interface Track {
@@ -117,6 +118,20 @@ export default function Settings() {
       />
       <button onClick={handleRestore} disabled={!restoreFile}>
         Restore Database
+      </button>
+      <hr />
+      <button
+        onClick={async () => {
+          if (
+            window.confirm("Are you sure you want to delete the database?")
+          ) {
+            await deleteDB();
+            alert("Database deleted successfully. The application will now reload.");
+            window.location.reload();
+          }
+        }}
+      >
+        Delete Database
       </button>
     </main>
   );
