@@ -33,13 +33,13 @@ export default function ArtistPage() {
               `https://www.theaudiodb.com/api/v1/json/${API_KEY}/searchalbum.php?s=${artistName}&a=${name}`
             );
             const data = await response.json();
-            const imageUrl = data.album?.[0]?.strAlbumThumb || "/placeholder.jpg";
+            const imageUrl = data.album?.[0]?.strAlbumThumb || "/placeholder.svg";
             album = { name, artistName, imageUrl };
             insertAlbum(album);
             return album;
           } catch (error) {
             console.error("Error fetching album image:", error);
-            return { name, artistName, imageUrl: "/placeholder.jpg" };
+            return { name, artistName, imageUrl: "/placeholder.svg" };
           }
         })
       );

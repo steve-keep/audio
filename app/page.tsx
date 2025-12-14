@@ -29,13 +29,13 @@ export default function Home() {
               `https://www.theaudiodb.com/api/v1/json/${API_KEY}/search.php?s=${name}`
             );
             const data = await response.json();
-            const imageUrl = data.artists?.[0]?.strArtistThumb || "/placeholder.jpg";
+            const imageUrl = data.artists?.[0]?.strArtistThumb || "/placeholder.svg";
             artist = { name, imageUrl };
             insertArtist(artist);
             return artist;
           } catch (error) {
             console.error("Error fetching artist image:", error);
-            return { name, imageUrl: "/placeholder.jpg" };
+            return { name, imageUrl: "/placeholder.svg" };
           }
         })
       );
