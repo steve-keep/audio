@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "npx serve@latest out -p 3001 --config ../serve.json",
+    "start": "npx serve@latest out -p 3001",
     "lint": "eslint",
     "test": "npx playwright test",
     "test:ci": "fuser -k 3001/tcp 2>/dev/null || true && start-server-and-test start http://localhost:3001 'npx playwright test'"

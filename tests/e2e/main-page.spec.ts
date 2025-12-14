@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
   const dbBuffer = fs.readFileSync(dbPath);
   const dbArray = Array.from(dbBuffer);
 
-  await page.goto('http://localhost:3001/audio/settings');
+  await page.goto('http://localhost:3001/settings');
   await page.evaluate(async (data) => {
     const dbName = 'audio-indexer-db';
     const request = indexedDB.open(dbName, 1);
@@ -31,14 +31,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('main page should display artists', async ({ page }) => {
-  await page.goto('http://localhost:3001/audio');
+  await page.goto('http://localhost:3001/');
   await page.waitForSelector('h1:has-text("Artists")');
   const artist = await page.locator('a > div > h3').first();
   await expect(artist).toBeVisible();
 });
 
 test('main page should display a placeholder for broken images', async ({ page }) => {
-  await page.goto('http://localhost:3001/audio');
+  await page.goto('http://localhost:3001/');
   await page.waitForSelector('h1:has-text("Artists")');
   const placeholder = await page.locator('img[data-testid="placeholder-image"]');
   await expect(placeholder.first()).toBeVisible();
