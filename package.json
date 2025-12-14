@@ -3,28 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack",
-    "build": "next build --webpack",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@types/jsmediatags": "^3.9.6",
     "jsmediatags": "^3.9.7",
-    "next": "16.0.10",
-    "react": "19.2.1",
-    "react-dom": "19.2.1",
+    "next": "14.2.4",
+    "react": "^18",
+    "react-dom": "^18",
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
     "@types/sql.js": "^1.4.9",
     "@types/webpack": "^5.28.5",
     "@types/wicg-file-system-access": "^2023.10.7",
-    "eslint": "^9",
-    "eslint-config-next": "16.0.10",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.4",
     "typescript": "^5"
   }
 }
