@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import BurgerMenu from "./components/BurgerMenu";
 import { initDB, getArtists, getArtist, insertArtist } from "./database";
 import { API_KEY } from "./constants";
 
@@ -46,6 +47,7 @@ export default function Home() {
 
   return (
     <main>
+      <BurgerMenu />
       <h1>Artists</h1>
       <div
         style={{
