@@ -70,7 +70,7 @@ export default function Settings() {
   const handleBackup = () => {
     const data = exportDB();
     if (data) {
-      const blob = new Blob([data.buffer]);
+      const blob = new Blob([new Uint8Array(data)]);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
