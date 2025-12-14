@@ -1,9 +1,18 @@
-import initSqlJs, { Database } from "sql.js";
+import initSqlJs, { Database, SqlJsStatic } from "sql.js";
 
 let db: Database | null = null;
+let SQL: SqlJsStatic | null = null;
 
 const DB_NAME = "audio-indexer-db";
 const DB_STORE_NAME = "database";
+
+async function initializeSql(): Promise<SqlJsStatic> {
+  if (SQL) return SQL;
+  SQL = await initSqlJs({
+    locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
+  });
+  return SQL;
+}
 
 function openIndexedDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -41,14 +50,12 @@ export async function saveDbToIndexedDB() {
 export async function initDB() {
   if (db) return db;
 
-  const SQL = await initSqlJs({
-    locateFile: (file: string) => `https://sql.js.org/dist/${file}`,
-  });
+  const sql = await initializeSql();
   const dbData = await loadDbFromIndexedDB();
   if (dbData) {
-    db = new SQL.Database(dbData);
+    db = new sql.Database(dbData);
   } else {
-    db = new SQL.Database();
+    db = new sql.Database();
   }
   createTables();
   return db;
@@ -64,6 +71,18 @@ export function createTables() {
       album TEXT,
       track TEXT
     );
+    CREATE TABLE IF NOT EXISTS artists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE,
+      imageUrl TEXT
+    );
+    CREATE TABLE IF NOT EXISTS albums (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
+      artistName TEXT,
+      imageUrl TEXT,
+      UNIQUE(name, artistName)
+    );
   `;
   db.run(query);
 }
@@ -75,6 +94,17 @@ export interface Track {
   track: string;
 }
 
+export interface Artist {
+  name: string;
+  imageUrl: string;
+}
+
+export interface Album {
+  name: string;
+  artistName: string;
+  imageUrl: string;
+}
+
 export function insertTrack(track: Track) {
   if (!db) return;
   const stmt = db.prepare(
@@ -84,13 +114,73 @@ export function insertTrack(track: Track) {
   stmt.free();
 }
 
-export function getAlbums() {
+export function insertArtist(artist: Artist) {
+  if (!db) return;
+  const stmt = db.prepare(
+    "INSERT OR IGNORE INTO artists (name, imageUrl) VALUES (?, ?)"
+  );
+  stmt.run([artist.name, artist.imageUrl]);
+  stmt.free();
+}
+
+export function insertAlbum(album: Album) {
+  if (!db) return;
+  const stmt = db.prepare(
+    "INSERT OR IGNORE INTO albums (name, artistName, imageUrl) VALUES (?, ?, ?)"
+  );
+  stmt.run([album.name, album.artistName, album.imageUrl]);
+  stmt.free();
+}
+
+export function getArtists() {
   if (!db) return [];
-  const res = db.exec("SELECT DISTINCT album FROM tracks ORDER BY album");
+  const res = db.exec("SELECT DISTINCT artist FROM tracks ORDER BY artist");
   if (res.length === 0) {
     return [];
   }
   return res[0].values.map((row) => row?.[0] as string);
+}
+
+export function getArtist(artistName: string): Artist | null {
+  if (!db) return null;
+  const stmt = db.prepare("SELECT name, imageUrl FROM artists WHERE name = ?");
+  stmt.bind([artistName]);
+  if (stmt.step()) {
+    const result = stmt.getAsObject() as unknown as Artist;
+    stmt.free();
+    return result;
+  }
+  stmt.free();
+  return null;
+}
+
+export function getAlbum(albumName: string, artistName: string): Album | null {
+  if (!db) return null;
+  const stmt = db.prepare(
+    "SELECT name, artistName, imageUrl FROM albums WHERE name = ? AND artistName = ?"
+  );
+  stmt.bind([albumName, artistName]);
+  if (stmt.step()) {
+    const result = stmt.getAsObject() as unknown as Album;
+    stmt.free();
+    return result;
+  }
+  stmt.free();
+  return null;
+}
+
+export function getAlbumsByArtist(artistName: string) {
+  if (!db) return [];
+  const stmt = db.prepare(
+    "SELECT DISTINCT album FROM tracks WHERE artist = ? ORDER BY album"
+  );
+  stmt.bind([artistName]);
+  const albums: string[] = [];
+  while (stmt.step()) {
+    albums.push(stmt.get()[0] as string);
+  }
+  stmt.free();
+  return albums;
 }
 
 export function getTracksByAlbum(albumName: string) {
@@ -105,4 +195,18 @@ export function getTracksByAlbum(albumName: string) {
   }
   stmt.free();
   return tracks;
+}
+
+export function exportDB(): Uint8Array | null {
+  if (!db) return null;
+  return db.export();
+}
+
+export async function restoreDB(data: Uint8Array) {
+  const sql = await initializeSql();
+  if (db) {
+    db.close();
+  }
+  db = new sql.Database(data);
+  await saveDbToIndexedDB();
 }
