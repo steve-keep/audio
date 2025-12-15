@@ -62,6 +62,9 @@ h1 {
 
 /* Library Page */
 .library-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1.5rem;
   list-style: none;
   padding: 0;
   margin: 0;
@@ -70,21 +73,35 @@ h1 {
 .library-list-item {
   background-color: var(--secondary-color);
   border-radius: 8px;
-  margin-bottom: 1rem;
 }
 
 .library-list-item a {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 1rem;
+  justify-content: center;
+  padding: 1.5rem;
   text-decoration: none;
   color: var(--text-color);
+  text-align: center;
+  height: 100%;
 }
 
 .library-list-item svg {
-  margin-right: 1rem;
-  width: 24px;
-  height: 24px;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1rem;
+}
+
+.library-list-item .label {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.library-list-item .count {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-top: 0.25rem;
 }
 
 /* Grid for Artists and Albums */
@@ -130,4 +147,41 @@ h1 {
 
 .list-item:hover {
   background-color: var(--secondary-color);
+}
+
+/* Skeleton Loading */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton-icon {
+  width: 48px;
+  height: 48px;
+  background-color: var(--tertiary-color);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeleton-text {
+  width: 80px;
+  height: 20px;
+  background-color: var(--tertiary-color);
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeleton-text-small {
+  width: 60px;
+  height: 16px;
+  background-color: var(--tertiary-color);
+  border-radius: 4px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
