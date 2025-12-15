@@ -15,7 +15,7 @@ jobs:
       - name: Install Playwright
         run: npx playwright install --with-deps
       - name: Disable basePath for tests
-        run: sed -i "s|basePath: '/audio',|// basePath: '/audio',|" next.config.mjs
+        run: sed -i "s#basePath: '/audio',#// basePath: '/audio',#" next.config.mjs
       - name: Build
         run: npm run build
       - name: Run tests
