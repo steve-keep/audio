@@ -1,12 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap');
+
 /* app/styles.css */
 
 :root {
-  --background-color: #121212;
+  --background-color: #000000;
   --text-color: #ffffff;
-  --primary-color: #1db954;
+  --card-background-color: #1A1A1A;
+  --primary-color: #9c27b0; /* A nice purple for the active icon */
   --secondary-color: #282828;
   --tertiary-color: #181818;
   --border-color: #404040;
+  --font-family-serif: 'Playfair Display', serif;
 }
 
 body {
@@ -47,7 +51,7 @@ h1 {
   left: 0;
   right: 0;
   height: 60px;
-  background-color: var(--secondary-color);
+  background-color: #000000;
   display: flex;
   justify-content: space-around;
   align-items: center;
@@ -69,54 +73,68 @@ h1 {
   opacity: 1;
 }
 
+.nav-bar a.active-library {
+  color: var(--primary-color);
+  opacity: 1;
+}
+
+
 .nav-bar svg {
   width: 24px;
   height: 24px;
 }
 
-/* Library Page */
-.library-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 1.5rem;
+/* New Library Page Styles */
+.library-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.library-title {
+  font-family: var(--font-family-serif);
+  font-size: 2em;
+  font-weight: bold;
+}
+
+.settings-icon {
+  color: var(--text-color);
+}
+
+.library-menu {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.library-list-item {
-  background-color: var(--secondary-color);
-  border-radius: 8px;
-}
-
-.library-list-item a {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  text-decoration: none;
+.library-menu-item {
+  background-color: var(--card-background-color);
   color: var(--text-color);
-  text-align: center;
-  height: 100%;
+  border-radius: 8px;
+  padding: 15px 20px;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  text-decoration: none;
+  transition: background-color 0.2s ease-in-out;
 }
 
-.library-list-item svg {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 1rem;
+.library-menu-item:hover {
+  background-color: #2a2a2a;
 }
 
-.library-list-item .label {
+.library-menu-item svg {
+  width: 24px;
+  height: 24px;
+}
+
+.library-menu-item .label {
   font-size: 1.1rem;
   font-weight: 500;
 }
 
-.library-list-item .count {
-  font-size: 0.9rem;
-  opacity: 0.7;
-  margin-top: 0.25rem;
-}
 
 /* Grid for Artists and Albums */
 .grid-container {

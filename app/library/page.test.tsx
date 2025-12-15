@@ -1,29 +1,19 @@
 import { render, screen } from '@testing-library/react';
 import Library from './page';
-import { vi } from 'vitest';
-import * as database from '../database';
-
-vi.mock('../database');
 
 describe('Library page', () => {
-  it('should render the page and display the library stats', async () => {
-    const mockedDatabase = vi.mocked(database);
-    mockedDatabase.initDB.mockResolvedValue({} as any);
-    mockedDatabase.getArtistCount.mockReturnValue(5);
-    mockedDatabase.getAlbumCount.mockReturnValue(10);
-    mockedDatabase.getTrackCount.mockReturnValue(50);
-
+  it('should render the page and display the main navigation links', () => {
     render(<Library />);
 
-    expect(screen.getByText('My Library')).toBeInTheDocument();
+    // Check for the new title with a lowercase "l"
+    expect(screen.getByText('My library')).toBeInTheDocument();
 
-    expect(await screen.findByText('Artists')).toBeInTheDocument();
-    expect(await screen.findByText('5 artists')).toBeInTheDocument();
+    // Check that the main navigation links are present
+    expect(screen.getByText('Artists')).toBeInTheDocument();
+    expect(screen.getByText('Albums')).toBeInTheDocument();
+    expect(screen.getByText('Tracks')).toBeInTheDocument();
 
-    expect(await screen.findByText('Albums')).toBeInTheDocument();
-    expect(await screen.findByText('10 albums')).toBeInTheDocument();
-
-    expect(await screen.findByText('Tracks')).toBeInTheDocument();
-    expect(await screen.findByText('50 tracks')).toBeInTheDocument();
+    // Ensure the settings link is still there
+    expect(screen.getByTestId('settings-link')).toBeInTheDocument();
   });
 });
