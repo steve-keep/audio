@@ -6,7 +6,7 @@ import * as database from '../database';
 // Mock the database module
 vi.mock('../database', () => ({
   initDB: vi.fn().mockResolvedValue(undefined),
-  getTracksByAlbum: vi.fn(),
+  getTracksByAlbumAndArtist: vi.fn(),
   getAlbum: vi.fn(),
   insertAlbum: vi.fn(),
 }));
@@ -32,13 +32,23 @@ describe('AlbumPage', () => {
     });
 
     // Default Mocks
-    (database.getTracksByAlbum as vi.Mock).mockReturnValue(mockTracks);
+    (database.getTracksByAlbumAndArtist as vi.Mock).mockReturnValue(mockTracks);
     (database.getAlbum as vi.Mock).mockReturnValue(mockAlbum);
+  });
+
+  it('should call getTracksByAlbumAndArtist with the correct artist and album', async () => {
+    await act(async () => {
+      render(<AlbumPage />);
+    });
+
+    await waitFor(() => {
+      expect(database.getTracksByAlbumAndArtist).toHaveBeenCalledWith(mockAlbumName, mockArtistName);
+    });
   });
 
   it('should render album details and track list correctly', async () => {
     await act(async () => {
-        render(<AlbumPage />);
+      render(<AlbumPage />);
     });
 
     await waitFor(() => {
