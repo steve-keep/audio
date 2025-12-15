@@ -1,1 +1,0 @@
-self.__SSG_MANIFEST=new Set(["\u002Fartist\u002F[artistName]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()
