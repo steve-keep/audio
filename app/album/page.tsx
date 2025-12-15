@@ -2,28 +2,21 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { initDB, getAlbum, getTracksByAlbumAndArtist, type Track, type Album } from "../database";
+import { initDB, getTracksByAlbum, getAlbum, insertAlbum, type Track, type Album } from "../database";
+import { API_KEY } from "../constants";
 
 export default function AlbumPage() {
-  const [album, setAlbum] = useState<Album | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [album, setAlbum] = useState<Album | null>(null);
+  const [albumName, setAlbumName] = useState("");
+  const [artistName, setArtistName] = useState("");
 
   useEffect(() => {
-    const handleHashChange = async () => {
+    const handleHashChange = () => {
       const hash = window.location.hash.substring(1);
-      if (!hash) return;
-
-      const [artistName, albumName] = decodeURIComponent(hash).split(" - ");
-      if (!artistName || !albumName) return;
-
-      await initDB();
-      const albumData = getAlbum(albumName, artistName);
-      setAlbum(albumData);
-
-      if (albumData) {
-        const trackData = getTracksByAlbumAndArtist(albumName, artistName);
-        setTracks(trackData);
-      }
+      const [artist, album] = hash.split("/").map(decodeURIComponent);
+      setArtistName(artist || "");
+      setAlbumName(album || "");
     };
 
     handleHashChange();
@@ -34,41 +27,64 @@ export default function AlbumPage() {
     };
   }, []);
 
-  if (!album) {
-    return (
-      <main>
-        <h1>Loading...</h1>
-      </main>
-    );
-  }
+  useEffect(() => {
+    if (!albumName || !artistName) return;
+
+    const fetchAlbumData = async () => {
+      await initDB();
+
+      // Fetch tracks
+      const trackData = getTracksByAlbum(albumName, artistName);
+      setTracks(trackData);
+
+      // Fetch album details for the cover art
+      let albumData = getAlbum(albumName, artistName);
+      if (albumData && albumData.imageUrl) {
+        setAlbum(albumData);
+      } else {
+        try {
+          const response = await fetch(
+            `https://www.theaudiodb.com/api/v1/json/${API_KEY}/searchalbum.php?s=${artistName}&a=${albumName}`
+          );
+          const data = await response.json();
+          const imageUrl = data.album?.[0]?.strAlbumThumb || "/placeholder.svg";
+          albumData = { name: albumName, artistName, imageUrl };
+          insertAlbum(albumData);
+          setAlbum(albumData);
+        } catch (error) {
+          console.error("Error fetching album image:", error);
+          setAlbum({ name: albumName, artistName, imageUrl: "/placeholder.svg" });
+        }
+      }
+    };
+
+    fetchAlbumData();
+  }, [albumName, artistName]);
 
   return (
     <main>
-      <Link href="/albums" style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
-        &larr; Back to Albums
+      <Link href={`/artist#${encodeURIComponent(artistName)}`} style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
+        &larr; Back to {artistName}
       </Link>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '2rem' }}>
-        <img
-          src={album.imageUrl}
-          alt={album.name}
-          width="150"
-          height="150"
-          style={{ objectFit: "cover", borderRadius: "8px", marginRight: '1.5rem' }}
-        />
+
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
+        {album && (
+          <img
+            src={album.imageUrl}
+            alt={album.name}
+            style={{ width: '150px', height: '150px', objectFit: 'cover', borderRadius: '8px', marginRight: '1.5rem' }}
+          />
+        )}
         <div>
-          <h1>{album.name}</h1>
-          <p style={{ fontSize: '1.2rem', opacity: 0.8 }}>{album.artistName}</p>
+          <h1>{albumName}</h1>
+          <h2 style={{ marginTop: '-1rem', opacity: 0.8 }}>{artistName}</h2>
         </div>
       </div>
 
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {tracks.map((track, index) => (
-          <li key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-            <div>
-              <div style={{ fontWeight: 'bold' }}>{track.title}</div>
-              <div>{track.artist}</div>
-            </div>
-            <div style={{ opacity: 0.7 }}>{track.track}</div>
+      <ul className="list">
+        {tracks.map((track) => (
+          <li key={track.title} className="list-item">
+            {track.track}. {track.title}
           </li>
         ))}
       </ul>
