@@ -14,6 +14,11 @@ vi.mock('../database', () => ({
 // Mock fetch
 global.fetch = vi.fn();
 
+// Mock the LoadingSpinner component
+vi.mock('../components/LoadingSpinner', () => ({
+  default: () => <div data-testid="loading-spinner"></div>,
+}));
+
 describe('ArtistPage', () => {
   const mockArtistName = 'Test Artist';
 
@@ -29,24 +34,7 @@ describe('ArtistPage', () => {
     });
   });
 
-  it('should render the artist name and a link back to the artists page', async () => {
-    (database.getAlbumsByArtist as vi.Mock).mockReturnValue([]);
-    window.location.hash = `#${mockArtistName}`;
-
-    await act(async () => {
-      render(<ArtistPage />);
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(mockArtistName)).toBeInTheDocument();
-    });
-    const backLink = screen.getByText(/Back to Artists/);
-    expect(backLink).toBeInTheDocument();
-    expect(backLink).toHaveAttribute('href', '/artists');
-    expect(backLink.textContent).toContain('←');
-  });
-
-  it('should fetch and display albums for the artist', async () => {
+  it('should show a loading spinner and then render the artist page', async () => {
     const mockAlbums = ['Album 1', 'Album 2'];
     (database.getAlbumsByArtist as vi.Mock).mockReturnValue(mockAlbums);
     (database.getAlbum as vi.Mock).mockReturnValueOnce(null); // First time it's not in the DB
@@ -57,11 +45,17 @@ describe('ArtistPage', () => {
 
     window.location.hash = `#${mockArtistName}`;
 
-    await act(async () => {
-      render(<ArtistPage />);
-    });
+    render(<ArtistPage />);
+
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
 
     await waitFor(() => {
+      expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
+      expect(screen.getByText(mockArtistName)).toBeInTheDocument();
+      const backLink = screen.getByText(/Back to Artists/);
+      expect(backLink).toBeInTheDocument();
+      expect(backLink).toHaveAttribute('href', '/artists');
+      expect(backLink.textContent).toContain('←');
       expect(screen.getByText('Album 1')).toBeInTheDocument();
       expect(screen.getByAltText('Album 1')).toHaveAttribute('src', 'http://example.com/album1.jpg');
       expect(screen.getByText('Album 2')).toBeInTheDocument();

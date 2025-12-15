@@ -9,6 +9,11 @@ vi.mock('../database', () => ({
   getTracksByAlbumAndArtist: vi.fn(),
 }));
 
+// Mock the LoadingSpinner component
+vi.mock('../components/LoadingSpinner', () => ({
+  default: () => <div data-testid="loading-spinner"></div>,
+}));
+
 describe('Album page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,11 +36,12 @@ describe('Album page', () => {
 
     window.location.hash = `#${encodeURIComponent('Artist 1 - Album 1')}`;
 
-    await act(async () => {
-        render(<AlbumPage />);
-    });
+    render(<AlbumPage />);
+
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
 
     await waitFor(() => {
+      expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
       // Check for album title
       expect(screen.getByRole('heading', { name: 'Album 1' })).toBeInTheDocument();
 

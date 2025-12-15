@@ -11,6 +11,11 @@ vi.mock('../database', () => ({
   insertArtist: vi.fn(),
 }));
 
+// Mock the LoadingSpinner component
+vi.mock('../components/LoadingSpinner', () => ({
+  default: () => <div data-testid="loading-spinner"></div>,
+}));
+
 // Mock fetch
 global.fetch = vi.fn();
 
@@ -50,6 +55,19 @@ describe('Artists page integration test', () => {
     // Check that the images are displayed correctly
     expect(screen.getByAltText('Artist 1')).toHaveAttribute('src', 'http://example.com/artist1.jpg');
     expect(screen.getByAltText('Artist 2')).toHaveAttribute('src', 'http://example.com/artist2.jpg');
+  });
+
+  it('should show a loading spinner while fetching data', async () => {
+    (database.getArtists as vi.Mock).mockReturnValue(['Artist 1']);
+    (database.getArtist as vi.Mock).mockReturnValue({ name: 'Artist 1', imageUrl: 'http://example.com/artist1.jpg' });
+
+    render(<ArtistsPage />);
+
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
+    });
   });
 
   it('should display a placeholder image when fetching an image fails', async () => {

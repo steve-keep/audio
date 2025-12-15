@@ -4,9 +4,11 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { initDB, getArtists, getArtist, insertArtist, type Artist } from "../database";
 import { API_KEY } from "../constants";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 export default function ArtistsPage() {
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchArtists = async () => {
@@ -35,6 +37,7 @@ export default function ArtistsPage() {
         })
       );
       setArtists(artistData);
+      setLoading(false);
     };
     fetchArtists();
   }, []);
@@ -42,22 +45,26 @@ export default function ArtistsPage() {
   return (
     <main>
       <h1>Artists</h1>
-      <div className="grid-container">
-        {artists.map((artist) => (
-          <Link
-            href={`/artist#${encodeURIComponent(artist.name)}`}
-            key={artist.name}
-            className="grid-item"
-          >
-            <img
-              src={artist.imageUrl}
-              alt={artist.name}
-              data-testid={artist.imageUrl === '/placeholder.svg' ? 'placeholder-image' : ''}
-            />
-            <h3>{artist.name}</h3>
-          </Link>
-        ))}
-      </div>
+      {loading ? (
+        <LoadingSpinner />
+      ) : (
+        <div className="grid-container">
+          {artists.map((artist) => (
+            <Link
+              href={`/artist#${encodeURIComponent(artist.name)}`}
+              key={artist.name}
+              className="grid-item"
+            >
+              <img
+                src={artist.imageUrl}
+                alt={artist.name}
+                data-testid={artist.imageUrl === '/placeholder.svg' ? 'placeholder-image' : ''}
+              />
+              <h3>{artist.name}</h3>
+            </Link>
+          ))}
+        </div>
+      )}
     </main>
   );
 }

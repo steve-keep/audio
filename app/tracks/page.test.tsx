@@ -8,12 +8,17 @@ vi.mock('../database', () => ({
   getAllTracks: vi.fn(),
 }));
 
+// Mock the LoadingSpinner component
+vi.mock('../components/LoadingSpinner', () => ({
+  default: () => <div data-testid="loading-spinner"></div>,
+}));
+
 describe('Tracks page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should render the page with a list of tracks', async () => {
+  it('should show a loading spinner and then render the page with a list of tracks', async () => {
     const mockTracks = [
       { title: 'Track 1', artist: 'Artist 1', album: 'Album 1', track: '1' },
       { title: 'Track 2', artist: 'Artist 2', album: 'Album 2', track: '2' },
@@ -22,7 +27,10 @@ describe('Tracks page', () => {
 
     render(<TracksPage />);
 
+    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+
     await waitFor(() => {
+      expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
       expect(screen.getByText('Track 1')).toBeInTheDocument();
       expect(screen.getByText('Artist 1')).toBeInTheDocument();
       expect(screen.getByText('Album 1 - Track 1')).toBeInTheDocument();

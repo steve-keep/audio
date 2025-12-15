@@ -4,10 +4,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { initDB, getAlbumsByArtist, getAlbum, insertAlbum, type Album } from "../database";
 import { API_KEY } from "../constants";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 export default function ArtistPage() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [artistName, setArtistName] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -51,6 +53,7 @@ export default function ArtistPage() {
         })
       );
       setAlbums(albumData);
+      setLoading(false);
     };
 
     fetchAlbums();
@@ -58,22 +61,28 @@ export default function ArtistPage() {
 
   return (
     <main>
-      <Link href="/artists" style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
-        &larr; Back to Artists
-      </Link>
-      <h1>{artistName}</h1>
-      <div className="grid-container">
-        {albums.map((album) => (
-          <div key={album.name} className="grid-item">
-            <img
-              src={album.imageUrl}
-              alt={album.name}
-              data-testid={album.imageUrl === '/placeholder.svg' ? 'placeholder-image' : ''}
-            />
-            <h3>{album.name}</h3>
+      {loading ? (
+        <LoadingSpinner />
+      ) : (
+        <>
+          <Link href="/artists" style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
+            &larr; Back to Artists
+          </Link>
+          <h1>{artistName}</h1>
+          <div className="grid-container">
+            {albums.map((album) => (
+              <div key={album.name} className="grid-item">
+                <img
+                  src={album.imageUrl}
+                  alt={album.name}
+                  data-testid={album.imageUrl === '/placeholder.svg' ? 'placeholder-image' : ''}
+                />
+                <h3>{album.name}</h3>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </main>
   );
 }
