@@ -197,6 +197,46 @@ export function getTracksByAlbum(albumName: string) {
   return tracks;
 }
 
+export function getTracksByAlbumAndArtist(albumName: string, artistName: string): Track[] {
+  if (!db) return [];
+  const stmt = db.prepare(
+    "SELECT title, artist, album, track FROM tracks WHERE album = ? AND artist = ? ORDER BY CAST(track AS INTEGER)"
+  );
+  stmt.bind([albumName, artistName]);
+  const tracks: Track[] = [];
+  while (stmt.step()) {
+    tracks.push(stmt.getAsObject() as unknown as Track);
+  }
+  stmt.free();
+  return tracks;
+}
+
+export function getAllAlbums(): Album[] {
+  if (!db) return [];
+  const stmt = db.prepare(
+    "SELECT name, artistName, imageUrl FROM albums ORDER BY name"
+  );
+  const albums: Album[] = [];
+  while (stmt.step()) {
+    albums.push(stmt.getAsObject() as unknown as Album);
+  }
+  stmt.free();
+  return albums;
+}
+
+export function getAllTracks(): Track[] {
+  if (!db) return [];
+  const stmt = db.prepare(
+    "SELECT title, artist, album, track FROM tracks ORDER BY artist, album, CAST(track AS INTEGER)"
+  );
+  const tracks: Track[] = [];
+  while (stmt.step()) {
+    tracks.push(stmt.getAsObject() as unknown as Track);
+  }
+  stmt.free();
+  return tracks;
+}
+
 export function exportDB(): Uint8Array | null {
   if (!db) return null;
   return db.export();

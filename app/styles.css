@@ -1,0 +1,133 @@
+/* app/styles.css */
+
+:root {
+  --background-color: #121212;
+  --text-color: #ffffff;
+  --primary-color: #1db954;
+  --secondary-color: #282828;
+  --tertiary-color: #181818;
+  --border-color: #404040;
+}
+
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: var(--font-sans);
+}
+
+main {
+  padding: 1.5rem;
+  padding-bottom: 6rem; /* Add padding to the bottom to avoid content being hidden by the navbar */
+}
+
+h1 {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+}
+
+/* Navigation Bar */
+.nav-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: var(--secondary-color);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  border-top: 1px solid var(--border-color);
+}
+
+.nav-bar a {
+  color: var(--text-color);
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0.7;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.nav-bar a.active,
+.nav-bar a:hover {
+  opacity: 1;
+}
+
+.nav-bar svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Library Page */
+.library-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.library-list-item {
+  background-color: var(--secondary-color);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.library-list-item a {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  text-decoration: none;
+  color: var(--text-color);
+}
+
+.library-list-item svg {
+  margin-right: 1rem;
+  width: 24px;
+  height: 24px;
+}
+
+/* Grid for Artists and Albums */
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1.5rem;
+}
+
+.grid-item {
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.grid-item img {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.grid-item h3 {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+/* List for Tracks */
+.list {
+  list-style: none;
+  padding: 0;
+}
+
+.list-item {
+  display: block;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.list-item:hover {
+  background-color: var(--secondary-color);
+}
