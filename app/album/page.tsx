@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { initDB, getTracksByAlbum, getAlbum, insertAlbum, type Track, type Album } from "../database";
+import { initDB, getTracksByAlbumAndArtist, getAlbum, insertAlbum, type Track, type Album } from "../database";
 import { API_KEY } from "../constants";
 
 export default function AlbumPage() {
@@ -34,7 +34,7 @@ export default function AlbumPage() {
       await initDB();
 
       // Fetch tracks
-      const trackData = getTracksByAlbum(albumName, artistName);
+      const trackData = getTracksByAlbumAndArtist(albumName, artistName);
       setTracks(trackData);
 
       // Fetch album details for the cover art

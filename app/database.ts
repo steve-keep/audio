@@ -183,20 +183,6 @@ export function getAlbumsByArtist(artistName: string) {
   return albums;
 }
 
-export function getTracksByAlbum(albumName: string) {
-  if (!db) return [];
-  const stmt = db.prepare(
-    "SELECT title, artist, album, track FROM tracks WHERE album = ? ORDER BY CAST(track AS INTEGER)"
-  );
-  stmt.bind([albumName]);
-  const tracks: Track[] = [];
-  while (stmt.step()) {
-    tracks.push(stmt.getAsObject() as unknown as Track);
-  }
-  stmt.free();
-  return tracks;
-}
-
 export function getTracksByAlbumAndArtist(albumName: string, artistName: string): Track[] {
   if (!db) return [];
   const stmt = db.prepare(
