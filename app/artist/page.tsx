@@ -2,13 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { initDB, getAlbumsByArtist, getAlbum, insertAlbum } from "../database";
+import { initDB, getAlbumsByArtist, getAlbum, insertAlbum, type Album } from "../database";
 import { API_KEY } from "../constants";
-
-interface Album {
-  name: string;
-  imageUrl: string;
-}
 
 export default function ArtistPage() {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -63,24 +58,17 @@ export default function ArtistPage() {
 
   return (
     <main>
-      <Link href="/">Back to Artists</Link>
+      <Link href="/artists" style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
+        &larr; Back to Artists
+      </Link>
       <h1>{artistName}</h1>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-          gap: "1rem",
-        }}
-      >
+      <div className="grid-container">
         {albums.map((album) => (
-          <div key={album.name} style={{ textAlign: "center" }}>
+          <div key={album.name} className="grid-item">
             <img
               src={album.imageUrl}
               alt={album.name}
               data-testid={album.imageUrl === '/placeholder.svg' ? 'placeholder-image' : ''}
-              width="150"
-              height="150"
-              style={{ objectFit: "cover", borderRadius: "8px" }}
             />
             <h3>{album.name}</h3>
           </div>

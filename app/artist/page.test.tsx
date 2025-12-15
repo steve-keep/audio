@@ -1,4 +1,3 @@
-
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ArtistPage from './page';
@@ -41,7 +40,10 @@ describe('ArtistPage', () => {
     await waitFor(() => {
       expect(screen.getByText(mockArtistName)).toBeInTheDocument();
     });
-    expect(screen.getByText('Back to Artists')).toHaveAttribute('href', '/');
+    const backLink = screen.getByText(/Back to Artists/);
+    expect(backLink).toBeInTheDocument();
+    expect(backLink).toHaveAttribute('href', '/artists');
+    expect(backLink.textContent).toContain('←');
   });
 
   it('should fetch and display albums for the artist', async () => {
