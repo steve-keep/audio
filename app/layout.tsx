@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import NavBar from "./components/NavBar";
@@ -13,10 +13,31 @@ const robotoMono = Roboto_Mono({
   subsets: ["latin"],
 });
 
+const APP_NAME = "My Music Library";
+const APP_DESCRIPTION = "A personal music library app";
+
 export const metadata: Metadata = {
-  title: "My Music Library",
-  description: "A personal music library app",
+  applicationName: APP_NAME,
+  title: APP_NAME,
+  description: APP_DESCRIPTION,
+  manifest: "/audio/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: APP_NAME,
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  icons: {
+    apple: "/audio/icons/apple-icon-180.png",
+  },
 };
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
+};
+
 
 export default function RootLayout({
   children,
