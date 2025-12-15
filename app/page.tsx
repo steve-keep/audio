@@ -66,6 +66,7 @@ export default function Home() {
               <img
                 src={artist.imageUrl}
                 alt={artist.name}
+                data-testid={artist.imageUrl === '/placeholder.svg' ? 'placeholder-image' : ''}
                 width="150"
                 height="150"
                 style={{ objectFit: "cover", borderRadius: "8px" }}

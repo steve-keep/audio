@@ -5,8 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "npx serve@latest out -p 3001",
+    "lint": "eslint",
+    "test": "npx playwright test",
+    "test:ci": "fuser -k 3001/tcp 2>/dev/null || true && start-server-and-test start http://localhost:3001 'npx playwright test'"
   },
   "dependencies": {
     "@types/jsmediatags": "^3.9.6",
@@ -25,6 +27,8 @@
     "@types/wicg-file-system-access": "^2023.10.7",
     "eslint": "^8",
     "eslint-config-next": "14.2.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@playwright/test": "^1.45.0",
+    "start-server-and-test": "^2.0.4"
   }
 }

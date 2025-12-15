@@ -69,6 +69,7 @@ export default function ArtistPage({
             <img
               src={album.imageUrl}
               alt={album.name}
+              data-testid={album.imageUrl === '/placeholder.svg' ? 'placeholder-image' : ''}
               width="150"
               height="150"
               style={{ objectFit: "cover", borderRadius: "8px" }}
