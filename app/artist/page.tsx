@@ -10,20 +10,20 @@ interface Album {
   imageUrl: string;
 }
 
-export const hashChangeHandler = (setArtistName: (name: string) => void) => {
-  setArtistName(decodeURIComponent(window.location.hash.substring(1)));
-};
-
 export default function ArtistPage() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [artistName, setArtistName] = useState("");
 
   useEffect(() => {
-    const handler = () => hashChangeHandler(setArtistName);
-    hashChangeHandler(setArtistName);
-    window.addEventListener("hashchange", handler);
+    const handleHashChange = () => {
+      setArtistName(decodeURIComponent(window.location.hash.substring(1)));
+    };
+
+    handleHashChange(); // Set the initial artist name
+    window.addEventListener("hashchange", handleHashChange);
+
     return () => {
-      window.removeEventListener("hashchange", handler);
+      window.removeEventListener("hashchange", handleHashChange);
     };
   }, []);
 
