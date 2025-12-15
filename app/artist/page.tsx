@@ -2,23 +2,33 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { initDB, getAlbumsByArtist, getAlbum, insertAlbum } from "../../database";
-import { API_KEY } from "../../constants";
+import { initDB, getAlbumsByArtist, getAlbum, insertAlbum } from "../database";
+import { API_KEY } from "../constants";
 
 interface Album {
   name: string;
   imageUrl: string;
 }
 
-export default function ArtistPage({
-  params,
-}: {
-  params: { artistName: string };
-}) {
+export const hashChangeHandler = (setArtistName: (name: string) => void) => {
+  setArtistName(decodeURIComponent(window.location.hash.substring(1)));
+};
+
+export default function ArtistPage() {
   const [albums, setAlbums] = useState<Album[]>([]);
-  const { artistName } = params;
+  const [artistName, setArtistName] = useState("");
 
   useEffect(() => {
+    const handler = () => hashChangeHandler(setArtistName);
+    hashChangeHandler(setArtistName);
+    window.addEventListener("hashchange", handler);
+    return () => {
+      window.removeEventListener("hashchange", handler);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!artistName) return;
     const fetchAlbums = async () => {
       await initDB();
       const albumNames = getAlbumsByArtist(artistName);
@@ -48,9 +58,7 @@ export default function ArtistPage({
       setAlbums(albumData);
     };
 
-    if (artistName) {
-      fetchAlbums();
-    }
+    fetchAlbums();
   }, [artistName]);
 
   return (
