@@ -237,6 +237,33 @@ export function getAllTracks(): Track[] {
   return tracks;
 }
 
+export function getArtistCount(): number {
+  if (!db) return 0;
+  const res = db.exec("SELECT COUNT(*) FROM artists");
+  if (res.length === 0 || !res[0].values[0]) {
+    return 0;
+  }
+  return res[0].values[0][0] as number;
+}
+
+export function getAlbumCount(): number {
+  if (!db) return 0;
+  const res = db.exec("SELECT COUNT(*) FROM albums");
+  if (res.length === 0 || !res[0].values[0]) {
+    return 0;
+  }
+  return res[0].values[0][0] as number;
+}
+
+export function getTrackCount(): number {
+  if (!db) return 0;
+  const res = db.exec("SELECT COUNT(*) FROM tracks");
+  if (res.length === 0 || !res[0].values[0]) {
+    return 0;
+  }
+  return res[0].values[0][0] as number;
+}
+
 export function exportDB(): Uint8Array | null {
   if (!db) return null;
   return db.export();
