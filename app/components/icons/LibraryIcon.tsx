@@ -10,11 +10,10 @@ export default function LibraryIcon() {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
+      style={{ display: 'inline-block', marginLeft: '8px' }}
     >
-      <path d="m16 6 4 14" />
-      <path d="M12 6v14" />
-      <path d="M8 8v12" />
-      <path d="M4 4v16" />
+      <path d="M2 6s1.5-2 5-2 5 2 5 2v14s-1.5-1-5-1-5 1-5 1V6z" />
+      <path d="M12 6s1.5-2 5-2 5 2 5 2v14s-1.5-1-5-1-5 1-5 1V6z" />
     </svg>
   );
 }
