@@ -8,6 +8,8 @@ import LibraryIcon from "./icons/LibraryIcon";
 
 export default function NavBar() {
   const pathname = usePathname();
+  // The basePath is configured in next.config.mjs
+  const basePath = "/audio";
 
   const navItems = [
     { href: "/", icon: <HomeIcon />, label: "Home" },
@@ -17,15 +19,23 @@ export default function NavBar() {
 
   return (
     <nav className="nav-bar">
-      {navItems.map(({ href, icon, label }) => (
-        <Link
-          key={href}
-          href={href}
-          className={pathname === href ? "active" : ""}
-        >
-          {icon}
-        </Link>
-      ))}
+      {navItems.map(({ href, icon, label }) => {
+        // Construct the full path including the basePath for comparison
+        const fullPath = href === "/" ? basePath : `${basePath}${href}`;
+        const isActive = pathname === fullPath;
+
+        const getClassName = () => {
+          if (!isActive) return "";
+          if (href === "/library") return "active-library";
+          return "active";
+        };
+
+        return (
+          <Link key={href} href={href} className={getClassName()}>
+            {icon}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
