@@ -1,51 +1,62 @@
 
 import { render, screen, waitFor, act } from '@testing-library/react';
-import ArtistPage from './client';
-import * as database from '../../database';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import ArtistPage from './page';
+import * as database from '../database';
 
 // Mock the database module
-jest.mock('../../database', () => ({
-  initDB: jest.fn().mockResolvedValue(undefined),
-  getAlbumsByArtist: jest.fn(),
-  getAlbum: jest.fn(),
-  insertAlbum: jest.fn(),
+vi.mock('../database', () => ({
+  initDB: vi.fn().mockResolvedValue(undefined),
+  getAlbumsByArtist: vi.fn(),
+  getAlbum: vi.fn(),
+  insertAlbum: vi.fn(),
 }));
 
 // Mock fetch
-global.fetch = jest.fn();
+global.fetch = vi.fn();
 
 describe('ArtistPage', () => {
   const mockArtistName = 'Test Artist';
 
   beforeEach(() => {
     // Clear all mocks before each test
-    jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockClear();
+    vi.clearAllMocks();
+    (global.fetch as vi.Mock).mockClear();
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: {
+        hash: '',
+      },
+    });
   });
 
   it('should render the artist name and a link back to the artists page', async () => {
-    (database.getAlbumsByArtist as jest.Mock).mockReturnValue([]);
+    (database.getAlbumsByArtist as vi.Mock).mockReturnValue([]);
+    window.location.hash = `#${mockArtistName}`;
+
     await act(async () => {
-      render(<ArtistPage params={{ artistName: mockArtistName }} />);
+      render(<ArtistPage />);
     });
 
-    expect(screen.getByText(mockArtistName)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(mockArtistName)).toBeInTheDocument();
+    });
     expect(screen.getByText('Back to Artists')).toHaveAttribute('href', '/');
   });
 
   it('should fetch and display albums for the artist', async () => {
     const mockAlbums = ['Album 1', 'Album 2'];
-    const mockAlbumData = { name: 'Album 1', artistName: mockArtistName, imageUrl: 'http://example.com/album1.jpg' };
-
-    (database.getAlbumsByArtist as jest.Mock).mockReturnValue(mockAlbums);
-    (database.getAlbum as jest.Mock).mockReturnValueOnce(null); // First time it's not in the DB
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    (database.getAlbumsByArtist as vi.Mock).mockReturnValue(mockAlbums);
+    (database.getAlbum as vi.Mock).mockReturnValueOnce(null); // First time it's not in the DB
+    (global.fetch as vi.Mock).mockResolvedValueOnce({
       json: () => Promise.resolve({ album: [{ strAlbumThumb: 'http://example.com/album1.jpg' }] }),
     });
-    (database.getAlbum as jest.Mock).mockReturnValueOnce({ name: 'Album 2', artistName: mockArtistName, imageUrl: 'http://example.com/album2.jpg' }); // Second one is already in DB
+    (database.getAlbum as vi.Mock).mockReturnValueOnce({ name: 'Album 2', artistName: mockArtistName, imageUrl: 'http://example.com/album2.jpg' }); // Second one is already in DB
+
+    window.location.hash = `#${mockArtistName}`;
 
     await act(async () => {
-      render(<ArtistPage params={{ artistName: mockArtistName }} />);
+      render(<ArtistPage />);
     });
 
     await waitFor(() => {
@@ -65,12 +76,14 @@ describe('ArtistPage', () => {
 
   it('should display a placeholder image when fetching an image fails', async () => {
     const mockAlbums = ['Album 1'];
-    (database.getAlbumsByArtist as jest.Mock).mockReturnValue(mockAlbums);
-    (database.getAlbum as jest.Mock).mockReturnValue(null);
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('API Error'));
+    (database.getAlbumsByArtist as vi.Mock).mockReturnValue(mockAlbums);
+    (database.getAlbum as vi.Mock).mockReturnValue(null);
+    (global.fetch as vi.Mock).mockRejectedValueOnce(new Error('API Error'));
+
+    window.location.hash = `#${mockArtistName}`;
 
     await act(async () => {
-      render(<ArtistPage params={{ artistName: mockArtistName }} />);
+      render(<ArtistPage />);
     });
 
     await waitFor(() => {
