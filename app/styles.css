@@ -144,6 +144,10 @@ h1 {
   font-weight: 500;
 }
 
+.grid-item .artist-image {
+  border-radius: 50%;
+}
+
 /* List for Tracks */
 .list {
   list-style: none;

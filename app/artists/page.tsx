@@ -52,6 +52,7 @@ export default function ArtistsPage() {
             <img
               src={artist.imageUrl}
               alt={artist.name}
+              className="artist-image"
               data-testid={artist.imageUrl === '/placeholder.svg' ? 'placeholder-image' : ''}
             />
             <h3>{artist.name}</h3>
