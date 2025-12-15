@@ -1,32 +1,33 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Home from './page';
 import * as database from './database';
 
 // Mock the database module
-jest.mock('./database', () => ({
-  initDB: jest.fn().mockResolvedValue(undefined),
-  getArtists: jest.fn(),
-  getArtist: jest.fn(),
-  insertArtist: jest.fn(),
+vi.mock('./database', () => ({
+  initDB: vi.fn().mockResolvedValue(undefined),
+  getArtists: vi.fn(),
+  getArtist: vi.fn(),
+  insertArtist: vi.fn(),
 }));
 
 // Mock fetch
-global.fetch = jest.fn();
+global.fetch = vi.fn();
 
 describe('Home page integration test', () => {
   beforeEach(() => {
     // Clear all mocks before each test
-    jest.clearAllMocks();
-    (global.fetch as jest.Mock).mockClear();
+    vi.clearAllMocks();
+    (global.fetch as vi.Mock).mockClear();
   });
 
   it('should render the main page with a list of artists', async () => {
     const mockArtists = ['Artist 1', 'Artist 2'];
-    (database.getArtists as jest.Mock).mockReturnValue(mockArtists);
+    (database.getArtists as vi.Mock).mockReturnValue(mockArtists);
 
     // Mock getArtist to return a valid artist object for the first artist
-    (database.getArtist as jest.Mock).mockImplementation((name) => {
+    (database.getArtist as vi.Mock).mockImplementation((name) => {
         if (name === 'Artist 1') {
             return { name: 'Artist 1', imageUrl: 'http://example.com/artist1.jpg' };
         }
@@ -35,7 +36,7 @@ describe('Home page integration test', () => {
 
 
     // Mock fetch for the second artist
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    (global.fetch as vi.Mock).mockResolvedValueOnce({
         json: () => Promise.resolve({ artists: [{ strArtistThumb: 'http://example.com/artist2.jpg' }] }),
       });
 
@@ -54,9 +55,9 @@ describe('Home page integration test', () => {
 
   it('should display a placeholder image when fetching an image fails', async () => {
     const mockArtists = ['Artist 3'];
-    (database.getArtists as jest.Mock).mockReturnValue(mockArtists);
-    (database.getArtist as jest.Mock).mockReturnValue(null);
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('API Error'));
+    (database.getArtists as vi.Mock).mockReturnValue(mockArtists);
+    (database.getArtist as vi.Mock).mockReturnValue(null);
+    (global.fetch as vi.Mock).mockRejectedValueOnce(new Error('API Error'));
 
     render(<Home />);
 

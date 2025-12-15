@@ -58,7 +58,7 @@ export default function Home() {
       >
         {artists.map((artist) => (
           <Link
-            href={`/artist/${encodeURIComponent(artist.name)}`}
+            href={`/artist#${encodeURIComponent(artist.name)}`}
             key={artist.name}
             style={{ textDecoration: "none", color: "inherit" }}
           >
