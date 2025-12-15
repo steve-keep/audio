@@ -24,7 +24,6 @@ export default function NavBar() {
           className={pathname === href ? "active" : ""}
         >
           {icon}
-          <span>{label}</span>
         </Link>
       ))}
     </nav>

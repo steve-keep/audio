@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import MicrophoneIcon from "../components/icons/MicrophoneIcon";
-import VinylIcon from "../components/icons/VinylIcon";
 import MusicalNoteIcon from "../components/icons/MusicalNoteIcon";
 import {
   initDB,
@@ -11,6 +9,9 @@ import {
   getAlbumCount,
   getTrackCount,
 } from "../database";
+import SettingsIcon from "../components/icons/SettingsIcon";
+import UserIcon from "../components/icons/UserIcon";
+import DiscIcon from "../components/icons/DiscIcon";
 
 interface LibraryStats {
   artists: number;
@@ -38,13 +39,13 @@ export default function Library() {
   const libraryItems = [
     {
       href: "/artists",
-      icon: <MicrophoneIcon />,
+      icon: <UserIcon />,
       label: "Artists",
       count: stats?.artists,
     },
     {
       href: "/albums",
-      icon: <VinylIcon />,
+      icon: <DiscIcon />,
       label: "Albums",
       count: stats?.albums,
     },
@@ -59,7 +60,12 @@ export default function Library() {
   if (loading) {
     return (
       <main>
-        <h1>My Library</h1>
+        <div className="header">
+          <h1>My Library</h1>
+          <Link href="/settings" data-testid="settings-link">
+            <SettingsIcon />
+          </Link>
+        </div>
         <div className="library-list">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="library-list-item">
@@ -77,7 +83,12 @@ export default function Library() {
 
   return (
     <main>
-      <h1>My Library</h1>
+      <div className="header">
+        <h1>My Library</h1>
+        <Link href="/settings" data-testid="settings-link">
+          <SettingsIcon />
+        </Link>
+      </div>
       <ul className="library-list">
         {libraryItems.map(({ href, icon, label, count }) => (
           <li key={href} className="library-list-item">
