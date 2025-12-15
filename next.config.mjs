@@ -3,6 +3,7 @@ import webpack from "webpack";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
+  trailingSlash: true,
   basePath: '/audio',
   webpack: (config, { isServer }) => {
     config.plugins.push(
