@@ -144,4 +144,19 @@ describe("Settings page", () => {
     expect(backgroundWorker?.postMessage).toHaveBeenCalledWith({ type: "stop" });
     expect(database.clearDirectoryHandle).toHaveBeenCalled();
   });
+
+  it("should display the release version when the environment variable is set", async () => {
+    const releaseVersion = "Version: 1.0.0 (Built: 2024-01-01T12:00:00Z)";
+    process.env.NEXT_PUBLIC_RELEASE_VERSION = releaseVersion;
+
+    await act(async () => {
+      render(<Settings />);
+    });
+
+    const versionElement = screen.getByText(releaseVersion);
+    expect(versionElement).toBeInTheDocument();
+
+    // Clean up the environment variable after the test
+    delete process.env.NEXT_PUBLIC_RELEASE_VERSION;
+  });
 });
