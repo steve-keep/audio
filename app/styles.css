@@ -25,6 +25,11 @@ main {
   padding-bottom: 6rem; /* Add padding to the bottom to avoid content being hidden by the navbar */
 }
 
+.main-full-width {
+  padding: 0;
+  padding-bottom: 6rem;
+}
+
 h1 {
   font-size: 2.5rem;
   font-weight: bold;
@@ -226,6 +231,7 @@ h1 {
 
 /* Artist Header */
 .artist-header {
+  position: relative;
   width: 100%;
   max-height: 400px;
   overflow: hidden;
@@ -233,33 +239,46 @@ h1 {
 
 .artist-header-image {
   width: 100%;
-  height: auto;
+  height: 100%;
   object-fit: cover;
 }
 
+.back-button {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 20;
+}
+
+.artist-header-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 25%;
+  background: linear-gradient(to top, rgba(0, 0, 0, 1), transparent);
+  display: flex;
+  align-items: flex-end;
+  padding: 1.5rem;
+}
+
 .artist-header-name {
-  display: none;
-}
-
-/* Sticky header */
-.sticky-header {
-  position: sticky;
-  top: 0;
-  background-color: var(--background-color);
-  z-index: 10;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.sticky-header h2 {
   font-family: var(--font-family-serif);
   font-size: 2em;
   font-weight: bold;
   margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: white;
+  text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
 }
 
 /* Album Tabs */
