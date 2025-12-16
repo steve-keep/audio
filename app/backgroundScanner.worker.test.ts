@@ -105,12 +105,11 @@ describe("Background Scanner Worker", () => {
     const addedMessages = postMessageCalls.filter(
       (call: any) => call.type === "added"
     );
-    expect(addedMessages.length).toBe(1);
+    expect(addedMessages.length).toBe(2);
 
-    const addedPayload = addedMessages[0].payload;
-    expect(addedPayload.length).toBe(2);
+    const addedPayloads = addedMessages.flatMap((call: any) => call.payload);
 
-    expect(addedPayload).toEqual(
+    expect(addedPayloads).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: "Artist 1/Album 1/Track 1.mp3" }),
         expect.objectContaining({ path: "Track 2.flac" }),

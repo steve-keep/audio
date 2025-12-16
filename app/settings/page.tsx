@@ -25,6 +25,7 @@ export default function Settings() {
   const [isApiSupported, setIsApiSupported] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanningProgress, setScanningProgress] = useState(0);
+  const [totalDirectories, setTotalDirectories] = useState(0);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
   const [backgroundScanStatus, setBackgroundScanStatus] = useState("Inactive");
@@ -92,30 +93,6 @@ export default function Settings() {
       }
     };
 
-    // Auto-start background scanning
-    (async () => {
-      const handle = await getDirectoryHandle();
-      if (handle) {
-        const startScanner = () => {
-          const knownPaths = getAllTrackPaths();
-          backgroundWorkerRef.current?.postMessage({
-            type: "start",
-            payload: { directoryHandle: handle, knownFilePaths: knownPaths },
-          });
-        };
-
-        if ((await handle.queryPermission({ mode: "read" })) === "granted") {
-          startScanner();
-        } else if (
-          (await handle.requestPermission({ mode: "read" })) === "granted"
-        ) {
-          startScanner();
-        } else {
-          setBackgroundScanStatus("Permission denied. Please select directory again.");
-        }
-      }
-    })();
-
     return () => {
       workerRef.current?.terminate();
       backgroundWorkerRef.current?.terminate();
@@ -124,33 +101,89 @@ export default function Settings() {
 
   const handleDirectorySelection = async () => {
     try {
+      const mainDirectoryHandle = await window.showDirectoryPicker();
       setIsScanning(true);
       setScanningProgress(0);
-      const directoryHandle = await window.showDirectoryPicker();
-      workerRef.current?.postMessage(directoryHandle);
+
+      const subDirectories: FileSystemDirectoryHandle[] = [];
+      const rootFiles: FileSystemFileHandle[] = [];
+      for await (const entry of mainDirectoryHandle.values()) {
+        if (entry.kind === "directory") {
+          subDirectories.push(entry);
+        } else if (entry.kind === "file") {
+          rootFiles.push(entry);
+        }
+      }
+
+      // Create a temporary handle for the root directory files
+      const rootDirectoryHandle = {
+        values: async function* () {
+          for (const file of rootFiles) {
+            yield file;
+          }
+        },
+      };
+
+      const allDirectories = [rootDirectoryHandle as any as FileSystemDirectoryHandle, ...subDirectories];
+      setTotalDirectories(allDirectories.length);
+      const knownFilePaths = getAllTrackPaths();
+      const allNewTracks: RawTrack[] = [];
+      const workerPool: Worker[] = [];
+      const MAX_WORKERS = 4;
+
+      let completedDirectories = 0;
+
+      await new Promise<void>((resolve) => {
+        let directoryIndex = 0;
+
+        const processDirectory = (worker: Worker, dirHandle: FileSystemDirectoryHandle) => {
+          worker.onmessage = (event) => {
+            const newTracks = event.data.payload as RawTrack[];
+            allNewTracks.push(...newTracks);
+
+            completedDirectories++;
+            setScanningProgress(completedDirectories);
+
+            if (directoryIndex < allDirectories.length) {
+              processDirectory(worker, allDirectories[directoryIndex++]);
+            } else {
+              worker.terminate();
+              workerPool.splice(workerPool.indexOf(worker), 1);
+              if (workerPool.length === 0) {
+                resolve();
+              }
+            }
+          };
+
+          worker.postMessage({
+            directoryHandle: dirHandle,
+            knownFilePaths,
+          });
+        };
+
+        for (let i = 0; i < MAX_WORKERS && i < allDirectories.length; i++) {
+          const worker = new Worker(new URL("../subScanner.worker.ts", import.meta.url));
+          workerPool.push(worker);
+          processDirectory(worker, allDirectories[directoryIndex++]);
+        }
+
+        if (allDirectories.length === 0) {
+          resolve();
+        }
+      });
+
+      console.time("Bulk inserting tracks");
+      bulkInsertTracks(allNewTracks);
+      await saveDbToIndexedDB();
+      console.timeEnd("Bulk inserting tracks");
+
+      setArtistCount(getArtistCount());
+      setIsScanning(false);
+
     } catch (error) {
-      console.error("Error selecting directory:", error);
+      console.error("Error during directory selection or scanning:", error);
       setIsScanning(false);
     }
-  };
-
-  const handleStartBackgroundScan = async () => {
-    try {
-      const directoryHandle = await window.showDirectoryPicker();
-      await saveDirectoryHandle(directoryHandle);
-      const knownPaths = getAllTrackPaths();
-      backgroundWorkerRef.current?.postMessage({
-        type: "start",
-        payload: { directoryHandle, knownFilePaths: knownPaths },
-      });
-    } catch (error) {
-      console.error("Error starting background scan:", error);
-    }
-  };
-
-  const handleStopBackgroundScan = () => {
-    backgroundWorkerRef.current?.postMessage({ type: "stop" });
-    clearDirectoryHandle();
   };
 
   const handleBackup = () => {
@@ -194,27 +227,18 @@ export default function Settings() {
       ) : (
         <p>The File System Access API is not supported in your browser.</p>
       )}
-      {isScanning && <progress value={scanningProgress} max="100"></progress>}
+      {isScanning && (
+        <progress value={scanningProgress} max={totalDirectories}></progress>
+      )}
+      <p>Artists Scanned: {artistCount}</p>
       <hr />
       <h2>Background Scanning</h2>
       <p>
-        Enable continuous background scanning to automatically detect new
-        tracks. For best results, install this app as a PWA.
+        <i>Continuous background scanning is temporarily disabled.</i>
       </p>
-      <button
-        onClick={handleStartBackgroundScan}
-        disabled={isBackgroundScanning}
-      >
-        Select Directory & Start Scanning
-      </button>
-      <button
-        onClick={handleStopBackgroundScan}
-        disabled={!isBackgroundScanning}
-      >
-        Stop Scanning
-      </button>
+      <button disabled>Select Directory & Start Scanning</button>
+      <button disabled>Stop Scanning</button>
       <p>Status: {backgroundScanStatus}</p>
-      <p>Artists Scanned: {artistCount}</p>
       <hr />
       <h2>Database Management</h2>
       <button onClick={handleBackup}>Backup Database</button>

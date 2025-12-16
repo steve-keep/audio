@@ -36,6 +36,7 @@ describe("Settings page", () => {
     window.URL.createObjectURL = vi.fn(() => "blob:mock");
     window.URL.revokeObjectURL = vi.fn();
     vi.clearAllMocks();
+    mockWorkerInstances.forEach(w => w.terminate());
     mockWorkerInstances.length = 0; // Clear the array
     (database.getAllTrackPaths as vi.Mock).mockReturnValue(new Set());
     // Mock initDB to return a resolved promise
@@ -71,82 +72,6 @@ describe("Settings page", () => {
     createElementSpy.mockRestore();
   });
 
-  it("should start background scanning when a directory is selected", async () => {
-    const mockDirectoryHandle = { name: "test-dir" };
-    (window.showDirectoryPicker as vi.Mock).mockResolvedValue(mockDirectoryHandle);
-
-    await act(async () => {
-      render(<Settings />);
-    });
-
-    const startButton = screen.getByText("Select Directory & Start Scanning");
-    fireEvent.click(startButton);
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    const backgroundWorker = mockWorkerInstances.find(w => w.url.toString().includes('backgroundScanner.worker.ts'));
-    expect(backgroundWorker).toBeDefined();
-
-    act(() => {
-        backgroundWorker?.onmessage?.({
-            data: { type: 'state', payload: 'scanning' }
-        } as MessageEvent);
-    });
-
-    await screen.findByText("Status: scanning");
-
-    expect(database.saveDirectoryHandle).toHaveBeenCalledWith(mockDirectoryHandle);
-    expect(backgroundWorker?.postMessage).toHaveBeenCalledWith({
-      type: "start",
-      payload: {
-        directoryHandle: mockDirectoryHandle,
-        knownFilePaths: new Set(),
-      },
-    });
-  });
-
-  it("should stop background scanning when the stop button is clicked", async () => {
-    const mockDirectoryHandle = { name: "test-dir" };
-    (window.showDirectoryPicker as vi.Mock).mockResolvedValue(mockDirectoryHandle);
-
-    await act(async () => {
-        render(<Settings />);
-    });
-
-    const startButton = screen.getByText("Select Directory & Start Scanning");
-    const stopButton = screen.getByText("Stop Scanning");
-
-    fireEvent.click(startButton);
-
-    await act(async () => {
-        await Promise.resolve();
-    });
-
-    const backgroundWorker = mockWorkerInstances.find(w => w.url.toString().includes('backgroundScanner.worker.ts'));
-    expect(backgroundWorker).toBeDefined();
-
-    act(() => {
-        backgroundWorker?.onmessage?.({
-            data: { type: 'state', payload: 'scanning' }
-        } as MessageEvent);
-    });
-    await screen.findByText("Status: scanning");
-
-    fireEvent.click(stopButton);
-
-    act(() => {
-        backgroundWorker?.onmessage?.({
-            data: { type: 'state', payload: 'stopped' }
-        } as MessageEvent);
-    });
-    await screen.findByText("Status: stopped");
-
-    expect(backgroundWorker?.postMessage).toHaveBeenCalledWith({ type: "stop" });
-    expect(database.clearDirectoryHandle).toHaveBeenCalled();
-  });
-
   it("should display the release version when the environment variable is set", async () => {
     const releaseVersion = "Version: 1.0.0 (Built: 2024-01-01T12:00:00Z)";
     process.env.NEXT_PUBLIC_RELEASE_VERSION = releaseVersion;
@@ -160,5 +85,60 @@ describe("Settings page", () => {
 
     // Clean up the environment variable after the test
     delete process.env.NEXT_PUBLIC_RELEASE_VERSION;
+  });
+
+  it("should scan a directory using the multi-worker pool", async () => {
+    const mockDirectoryHandle = {
+      [Symbol.asyncIterator]: async function* () {
+        yield {
+          kind: "directory" as const,
+          name: "Artist 1",
+          values: async function* () {},
+        };
+        yield {
+          kind: "file" as const,
+          name: "Track 1.mp3",
+          getFile: () => Promise.resolve(new File([], "Track 1.mp3")),
+        };
+      },
+      values: function () {
+        return this[Symbol.asyncIterator]();
+      },
+    };
+    (window.showDirectoryPicker as vi.Mock).mockResolvedValue(
+      mockDirectoryHandle
+    );
+
+    await act(async () => {
+      render(<Settings />);
+    });
+
+    const scanButton = screen.getByText("Scan Directory");
+    await act(async () => {
+      fireEvent.click(scanButton);
+    });
+
+    const subScannerWorkers = mockWorkerInstances.filter((w) =>
+      w.url.toString().includes("subScanner.worker.ts")
+    );
+    expect(subScannerWorkers.length).toBe(2);
+
+    // Simulate workers returning results
+    await act(async () => {
+      subScannerWorkers[0].onmessage?.({
+        data: { type: "found", payload: [{ path: "Track 1.mp3" }] },
+      } as MessageEvent);
+      await Promise.resolve();
+      subScannerWorkers[1].onmessage?.({
+        data: { type: "found", payload: [] },
+      } as MessageEvent);
+      await Promise.resolve();
+    });
+
+    expect(database.bulkInsertTracks).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "Track 1.mp3" }),
+      ])
+    );
   });
 });
