@@ -38,23 +38,27 @@ export default function AlbumPage() {
       setTracks(trackData);
 
       // Fetch album details for the cover art
-      let albumData = getAlbum(albumName, artistName);
-      if (albumData && albumData.imageUrl) {
-        setAlbum(albumData);
-      } else {
+      const albumData = getAlbum(albumName, artistName);
+      if (albumData && !albumData.imageUrl) {
         try {
           const response = await fetch(
             `https://www.theaudiodb.com/api/v1/json/${API_KEY}/searchalbum.php?s=${artistName}&a=${albumName}`
           );
           const data = await response.json();
           const imageUrl = data.album?.[0]?.strAlbumThumb || "/placeholder.svg";
-          albumData = { name: albumName, artistName, imageUrl };
-          insertAlbum(albumData);
-          setAlbum(albumData);
+          insertAlbum({ name: albumName, artistName, imageUrl });
+          // Re-fetch the album data to get the complete object
+          const updatedAlbumData = getAlbum(albumName, artistName);
+          setAlbum(updatedAlbumData);
         } catch (error) {
           console.error("Error fetching album image:", error);
-          setAlbum({ name: albumName, artistName, imageUrl: "/placeholder.svg" });
+          // Even on error, try to set the existing data if it exists
+          if (albumData) {
+            setAlbum({ ...albumData, imageUrl: "/placeholder.svg" });
+          }
         }
+      } else {
+        setAlbum(albumData);
       }
     };
 
