@@ -5,6 +5,7 @@ let SQL: SqlJsStatic | null = null;
 
 const DB_NAME = "audio-indexer-db";
 const DB_STORE_NAME = "database";
+const DIRECTORY_HANDLE_STORE_NAME = "directoryHandle";
 
 async function initializeSql(): Promise<SqlJsStatic> {
   if (SQL) return SQL;
@@ -21,7 +22,12 @@ function openIndexedDB(): Promise<IDBDatabase> {
     request.onsuccess = () => resolve(request.result);
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      db.createObjectStore(DB_STORE_NAME);
+      if (!db.objectStoreNames.contains(DB_STORE_NAME)) {
+        db.createObjectStore(DB_STORE_NAME);
+      }
+      if (!db.objectStoreNames.contains(DIRECTORY_HANDLE_STORE_NAME)) {
+        db.createObjectStore(DIRECTORY_HANDLE_STORE_NAME);
+      }
     };
   });
 }
@@ -35,6 +41,13 @@ async function loadDbFromIndexedDB(): Promise<Uint8Array | null> {
     request.onerror = () => reject("Error loading from IndexedDB");
     request.onsuccess = () => resolve(request.result);
   });
+}
+
+export async function clearDirectoryHandle() {
+  const idb = await openIndexedDB();
+  const transaction = idb.transaction(DIRECTORY_HANDLE_STORE_NAME, "readwrite");
+  const store = transaction.objectStore(DIRECTORY_HANDLE_STORE_NAME);
+  store.delete("directoryHandle");
 }
 
 export async function saveDbToIndexedDB() {
@@ -81,6 +94,7 @@ export function createTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT,
       track TEXT,
+      path TEXT UNIQUE,
       album_id INTEGER,
       artist_id INTEGER,
       FOREIGN KEY(album_id) REFERENCES albums(id),
@@ -116,6 +130,7 @@ export interface RawTrack {
   artist: string;
   album: string;
   track: string;
+  path: string;
 }
 
 function getOrInsertArtistId(artistName: string): number {
@@ -166,9 +181,17 @@ export function insertTrack(track: RawTrack) {
   const albumId = getOrInsertAlbumId(track.album, artistId);
 
   const stmt = db.prepare(
-    "INSERT INTO tracks (title, track, album_id, artist_id) VALUES (?, ?, ?, ?)"
+    "INSERT INTO tracks (title, track, path, album_id, artist_id) VALUES (?, ?, ?, ?, ?)"
   );
-  stmt.run([track.title, track.track, albumId, artistId]);
+  stmt.run([track.title, track.track, track.path, albumId, artistId]);
+  stmt.free();
+}
+
+export function deleteTrackByPath(path: string) {
+  if (!db) return;
+
+  const stmt = db.prepare("DELETE FROM tracks WHERE path = ?");
+  stmt.run([path]);
   stmt.free();
 }
 
@@ -320,6 +343,17 @@ export function getAllTracks(): TrackWithAlbumAndArtist[] {
   return tracks;
 }
 
+export function getAllTrackPaths(): Set<string> {
+  if (!db) return new Set();
+  const stmt = db.prepare("SELECT path FROM tracks");
+  const paths = new Set<string>();
+  while (stmt.step()) {
+    paths.add(stmt.get()[0] as string);
+  }
+  stmt.free();
+  return paths;
+}
+
 export function getArtistCount(): number {
   if (!db) return 0;
   const res = db.exec("SELECT COUNT(*) FROM artists");
@@ -370,5 +404,25 @@ export async function deleteDB() {
     const request = indexedDB.deleteDatabase(DB_NAME);
     request.onerror = () => reject("Error deleting database");
     request.onsuccess = () => resolve();
+  });
+}
+
+export async function saveDirectoryHandle(
+  directoryHandle: FileSystemDirectoryHandle
+) {
+  const idb = await openIndexedDB();
+  const transaction = idb.transaction(DIRECTORY_HANDLE_STORE_NAME, "readwrite");
+  const store = transaction.objectStore(DIRECTORY_HANDLE_STORE_NAME);
+  store.put(directoryHandle, "directoryHandle");
+}
+
+export async function getDirectoryHandle(): Promise<FileSystemDirectoryHandle | null> {
+  const idb = await openIndexedDB();
+  return new Promise((resolve, reject) => {
+    const transaction = idb.transaction(DIRECTORY_HANDLE_STORE_NAME, "readonly");
+    const store = transaction.objectStore(DIRECTORY_HANDLE_STORE_NAME);
+    const request = store.get("directoryHandle");
+    request.onerror = () => reject("Error loading directory handle from IndexedDB");
+    request.onsuccess = () => resolve(request.result);
   });
 }
