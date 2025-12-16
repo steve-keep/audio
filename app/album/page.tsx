@@ -47,12 +47,10 @@ export default function AlbumPage() {
           const data = await response.json();
           const imageUrl = data.album?.[0]?.strAlbumThumb || "/placeholder.svg";
           insertAlbum({ name: albumName, artistName, imageUrl });
-          // Re-fetch the album data to get the complete object
-          const updatedAlbumData = getAlbum(albumName, artistName);
-          setAlbum(updatedAlbumData);
+          const updatedAlbum = getAlbum(albumName, artistName);
+          setAlbum(updatedAlbum);
         } catch (error) {
           console.error("Error fetching album image:", error);
-          // Even on error, try to set the existing data if it exists
           if (albumData) {
             setAlbum({ ...albumData, imageUrl: "/placeholder.svg" });
           }

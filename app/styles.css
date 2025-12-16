@@ -6,7 +6,7 @@
   --background-color: #000000;
   --text-color: #ffffff;
   --card-background-color: #1A1A1A;
-  --primary-color: #9c27b0; /* A nice purple for the active icon */
+  --primary-color: #E200D1;
   --secondary-color: #282828;
   --tertiary-color: #181818;
   --border-color: #404040;
@@ -17,6 +17,7 @@ body {
   background-color: var(--background-color);
   color: var(--text-color);
   font-family: var(--font-sans);
+  user-select: none;
 }
 
 main {
@@ -59,23 +60,24 @@ h1 {
 }
 
 .nav-bar a {
-  color: var(--text-color);
+  color: var(--text-color); /* Default color is white */
   text-decoration: none;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  opacity: 0.7;
+  justify-content: center; /* Center icon horizontally */
+  align-items: center;   /* Center icon vertically */
+  min-width: 44px;
+  min-height: 44px;
   transition: opacity 0.2s ease-in-out;
 }
 
-.nav-bar a.active,
-.nav-bar a:hover {
-  opacity: 1;
+/* Touch state */
+.nav-bar a:active {
+  opacity: 0.7;
 }
 
-.nav-bar a.active-library {
+/* Highlighted state for active tab */
+.nav-bar a.active {
   color: var(--primary-color);
-  opacity: 1;
 }
 
 
