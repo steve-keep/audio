@@ -14,7 +14,7 @@
     "@ducanh2912/next-pwa": "^10.2.9",
     "@types/jsmediatags": "^3.9.6",
     "jsmediatags": "^3.9.7",
-    "next": "14.2.6",
+    "next": "14.2.7",
     "react": "^18",
     "react-dom": "^18",
     "sql.js": "^1.13.0"
@@ -31,7 +31,7 @@
     "@vitejs/plugin-react": "^5.1.2",
     "@vitest/coverage-v8": "^4.0.15",
     "eslint": "^8",
-    "eslint-config-next": "14.2.6",
+    "eslint-config-next": "14.2.7",
     "jsdom": "^27.3.0",
     "prettier": "^3.3.2",
     "typescript": "^5",
