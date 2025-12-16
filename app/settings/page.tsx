@@ -183,7 +183,7 @@ export default function Settings() {
   };
 
   return (
-    <main>
+    <main style={{ paddingBottom: "5rem" }}>
       <h1>Settings</h1>
       <h2>Library Management</h2>
       {isApiSupported ? (
