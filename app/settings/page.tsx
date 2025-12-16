@@ -13,6 +13,7 @@ import {
   clearDirectoryHandle,
   getAllTrackPaths,
   deleteTrackByPath,
+  getArtistCount,
 } from "../database";
 
 import { RawTrack } from "../database";
@@ -26,6 +27,7 @@ export default function Settings() {
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
   const [backgroundScanStatus, setBackgroundScanStatus] = useState("Inactive");
+  const [artistCount, setArtistCount] = useState(0);
 
   const workerRef = useRef<Worker | null>(null);
   const backgroundWorkerRef = useRef<Worker | null>(null);
@@ -34,7 +36,9 @@ export default function Settings() {
     setIsApiSupported(
       typeof window !== "undefined" && "showDirectoryPicker" in window
     );
-    initDB();
+    initDB().then(() => {
+      setArtistCount(getArtistCount());
+    });
 
     // Setup for manual scanner
     workerRef.current = new Worker(
@@ -51,6 +55,7 @@ export default function Settings() {
           insertTrack(track);
         }
         await saveDbToIndexedDB();
+        setArtistCount(getArtistCount());
         setIsScanning(false);
       } else if (event.data.type === "error") {
         console.error(event.data.payload);
@@ -75,12 +80,14 @@ export default function Settings() {
           insertTrack(track);
         }
         await saveDbToIndexedDB();
+        setArtistCount(getArtistCount());
       } else if (type === "deleted") {
         const deletedPaths = payload as string[];
         for (const path of deletedPaths) {
           deleteTrackByPath(path);
         }
         await saveDbToIndexedDB();
+        setArtistCount(getArtistCount());
       }
     };
 
@@ -206,6 +213,7 @@ export default function Settings() {
         Stop Scanning
       </button>
       <p>Status: {backgroundScanStatus}</p>
+      <p>Artists Scanned: {artistCount}</p>
       <hr />
       <h2>Database Management</h2>
       <button onClick={handleBackup}>Backup Database</button>
