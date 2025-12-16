@@ -3,80 +3,47 @@
 import jsmediatags from "jsmediatags";
 import type { RawTrack } from "./database";
 
-interface FileWithHandle extends File {
-  handle: FileSystemFileHandle;
-}
-
 let timerId: number | null = null;
 let directoryHandle: FileSystemDirectoryHandle | null = null;
 let knownFilePaths = new Set<string>();
 
 const SCAN_INTERVAL = 60 * 1000; // 1 minute
 
-async function getFilePaths(dirHandle: FileSystemDirectoryHandle, path: string = ""): Promise<Set<string>> {
-  const filePaths = new Set<string>();
-  for await (const entry of dirHandle.values()) {
-    const entryPath = `${path}/${entry.name}`;
-    if (entry.kind === "file") {
-      const lowerCaseName = entry.name.toLowerCase();
-      if (lowerCaseName.endsWith(".mp3") || lowerCaseName.endsWith(".flac")) {
-        filePaths.add(entryPath);
-      }
-    } else if (entry.kind === "directory") {
-      const nestedPaths = await getFilePaths(entry, entryPath);
-      nestedPaths.forEach(p => filePaths.add(p));
-    }
-  }
-  return filePaths;
-}
-
-async function getFileByPath(dirHandle: FileSystemDirectoryHandle, path: string): Promise<File | null> {
-    const pathParts = path.split("/").filter(p => p);
-    let currentHandle: FileSystemDirectoryHandle | FileSystemFileHandle = dirHandle;
-
-    for (let i = 0; i < pathParts.length; i++) {
-      const part = pathParts[i];
-      if (currentHandle.kind === "directory") {
-        try {
-          currentHandle = i === pathParts.length - 1
-            ? await currentHandle.getFileHandle(part)
-            : await currentHandle.getDirectoryHandle(part);
-        } catch (e) {
-          return null;
-        }
-      } else {
-        return null;
-      }
-    }
-
-    if (currentHandle.kind === "file") {
-      return await currentHandle.getFile();
-    }
-    return null;
-  }
-
 async function scan() {
   if (!directoryHandle) return;
 
   self.postMessage({ type: "state", payload: "scanning" });
 
-  const currentFilePaths = await getFilePaths(directoryHandle);
-  const newFilePaths = [...currentFilePaths].filter(path => !knownFilePaths.has(path));
-  const deletedFilePaths = [...knownFilePaths].filter(path => !currentFilePaths.has(path));
+  const currentFilePaths = new Set<string>();
 
-  if (newFilePaths.length > 0) {
-    const newTracks: RawTrack[] = [];
-    for (const path of newFilePaths) {
-      const file = await getFileByPath(directoryHandle, path);
-      if (file) {
-        const track = await parseMetadata(file);
-        newTracks.push({ ...track, path });
+  async function scanDirectory(dirHandle: FileSystemDirectoryHandle, path: string) {
+    for await (const entry of dirHandle.values()) {
+      const entryPath = path ? `${path}/${entry.name}` : entry.name;
+
+      if (entry.kind === "file") {
+        const lowerCaseName = entry.name.toLowerCase();
+        if (lowerCaseName.endsWith(".mp3") || lowerCaseName.endsWith(".flac")) {
+          currentFilePaths.add(entryPath);
+
+          if (!knownFilePaths.has(entryPath)) {
+            try {
+              const file = await entry.getFile();
+              const track = await parseMetadata(file);
+              self.postMessage({ type: "added", payload: [{ ...track, path: entryPath }] });
+            } catch (error) {
+              console.error(`Error processing file ${entryPath}:`, error);
+            }
+          }
+        }
+      } else if (entry.kind === "directory") {
+        await scanDirectory(entry, entryPath);
       }
     }
-    if (newTracks.length > 0) {
-      self.postMessage({ type: "added", payload: newTracks });
-    }
   }
+
+  await scanDirectory(directoryHandle, "");
+
+  const deletedFilePaths = [...knownFilePaths].filter(path => !currentFilePaths.has(path));
 
   if (deletedFilePaths.length > 0) {
     self.postMessage({ type: "deleted", payload: deletedFilePaths });

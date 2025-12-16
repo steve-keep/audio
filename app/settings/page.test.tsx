@@ -37,7 +37,9 @@ describe("Settings page", () => {
     window.URL.revokeObjectURL = vi.fn();
     vi.clearAllMocks();
     mockWorkerInstances.length = 0; // Clear the array
-    (database.getAllTrackPaths as vi.Mock).mockReturnValue(new Set()); // Mock the new function
+    (database.getAllTrackPaths as vi.Mock).mockReturnValue(new Set());
+    // Mock initDB to return a resolved promise
+    (database.initDB as vi.Mock).mockResolvedValue(undefined);
   });
 
   it("should trigger a download with the correct filename when Backup Database is clicked", async () => {
