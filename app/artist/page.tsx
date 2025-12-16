@@ -137,10 +137,7 @@ export default function ArtistPage() {
 
   if (loading) {
     return (
-      <main>
-        <Link href="/artists" style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
-          &larr; Back to Artists
-        </Link>
+      <main className="main-full-width">
         <h1>Loading...</h1>
       </main>
     );
@@ -148,25 +145,21 @@ export default function ArtistPage() {
 
   if (!artist) {
     return (
-      <main>
-        <Link href="/artists" style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
-          &larr; Back to Artists
-        </Link>
+      <main className="main-full-width">
         <h1>Loading...</h1>
       </main>
     );
   }
 
   return (
-    <main>
-      <Link href="/artists" style={{ marginBottom: '1.5rem', display: 'inline-block' }}>
-        &larr; Back to Artists
-      </Link>
+    <main className="main-full-width">
       <ArtistHeader artistName={artist.name} artistImageUrl={artist.imageUrl} />
-      <AlbumTabs
-        allAlbums={<AlbumList albums={allAlbums} showLibraryIcon={isAlbumInLibrary} />}
-        libraryAlbums={<AlbumList albums={libraryAlbums} />}
-      />
+      <div style={{ padding: "0 1.5rem" }}>
+        <AlbumTabs
+          allAlbums={<AlbumList albums={allAlbums} showLibraryIcon={isAlbumInLibrary} />}
+          libraryAlbums={<AlbumList albums={libraryAlbums} />}
+        />
+      </div>
     </main>
   );
 }
