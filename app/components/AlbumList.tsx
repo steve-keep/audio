@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { type Album } from "../database";
+import { type AlbumWithArtist } from "../database";
 import LibraryIcon from "./icons/LibraryIcon";
 
 interface AlbumListProps {
-  albums: Album[];
+  albums: AlbumWithArtist[];
   showLibraryIcon?: (albumName: string) => boolean;
 }
 
@@ -15,7 +15,7 @@ export default function AlbumList({ albums, showLibraryIcon }: AlbumListProps) {
           href={`/album#${encodeURIComponent(album.artistName)}/${encodeURIComponent(
             album.name
           )}`}
-          key={album.name}
+          key={`${album.artistName}-${album.name}`}
           className="grid-item"
         >
           {album.imageUrl && <img src={album.imageUrl} alt={album.name} />}

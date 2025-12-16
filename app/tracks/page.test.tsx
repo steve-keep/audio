@@ -15,8 +15,8 @@ describe('Tracks page', () => {
 
   it('should render the page with a list of tracks', async () => {
     const mockTracks = [
-      { title: 'Track 1', artist: 'Artist 1', album: 'Album 1', track: '1' },
-      { title: 'Track 2', artist: 'Artist 2', album: 'Album 2', track: '2' },
+      { id: 1, title: 'Track 1', artistName: 'Artist 1', albumName: 'Album 1', track: '1' },
+      { id: 2, title: 'Track 2', artistName: 'Artist 2', albumName: 'Album 2', track: '2' },
     ];
     (database.getAllTracks as vi.Mock).mockReturnValue(mockTracks);
 
