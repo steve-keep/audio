@@ -12,15 +12,12 @@ import {
   saveDirectoryHandle,
   clearDirectoryHandle,
   getAllTrackPaths,
+  deleteTrackByPath,
 } from "../database";
 
-interface Track {
-  title: string;
-  artist: string;
-  album: string;
-  track: string;
-  path?: string;
-}
+import { RawTrack } from "../database";
+
+interface Track extends RawTrack {}
 
 export default function Settings() {
   const [isApiSupported, setIsApiSupported] = useState(false);
@@ -49,7 +46,7 @@ export default function Settings() {
       if (event.data.type === "progress") {
         setScanningProgress(event.data.payload);
       } else if (event.data.type === "complete") {
-        const tracks = event.data.payload as Track[];
+        const tracks = event.data.payload as RawTrack[];
         for (const track of tracks) {
           insertTrack(track);
         }

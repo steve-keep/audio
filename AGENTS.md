@@ -1,4 +1,4 @@
 - Always run tests when working on a thing before creating a PR
-- Always make sure that the software builds before creating a PR
+- Always make sure that the software builds before creating a PR by running `npm run build`
 - When creating a PR, set it to ready for review
 - All new unit and integration tests MUST be written using the React Testing Library.

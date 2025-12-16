@@ -8,21 +8,22 @@ import type { RawTrack } from "./database";
 self.onmessage = async (event: MessageEvent<FileSystemDirectoryHandle>) => {
   const directoryHandle = event.data;
   const tracks: RawTrack[] = [];
-  const filesToProcess: File[] = [];
+  const filesToProcess: { file: File, path: string }[] = [];
 
   try {
-    const collectFiles = async (dirHandle: FileSystemDirectoryHandle) => {
+    const collectFiles = async (dirHandle: FileSystemDirectoryHandle, path: string = "") => {
       for await (const entry of dirHandle.values()) {
+        const entryPath = `${path}/${entry.name}`;
         if (entry.kind === "file") {
           const lowerCaseName = entry.name.toLowerCase();
           if (
             lowerCaseName.endsWith(".mp3") ||
             lowerCaseName.endsWith(".flac")
           ) {
-            filesToProcess.push(await entry.getFile());
+            filesToProcess.push({ file: await entry.getFile(), path: entryPath });
           }
         } else if (entry.kind === "directory") {
-          await collectFiles(entry);
+          await collectFiles(entry, entryPath);
         }
       }
     };
@@ -30,7 +31,7 @@ self.onmessage = async (event: MessageEvent<FileSystemDirectoryHandle>) => {
     await collectFiles(directoryHandle);
 
     for (let i = 0; i < filesToProcess.length; i++) {
-      const file = filesToProcess[i];
+      const { file, path } = filesToProcess[i];
       await new Promise<void>((resolve) => {
         jsmediatags.read(file, {
           onSuccess: (tag) => {
@@ -40,6 +41,7 @@ self.onmessage = async (event: MessageEvent<FileSystemDirectoryHandle>) => {
               artist: tags.artist || "Unknown Artist",
               album: tags.album || "Unknown Album",
               track: tags.track || "0",
+              path,
             });
             resolve();
           },
@@ -50,6 +52,7 @@ self.onmessage = async (event: MessageEvent<FileSystemDirectoryHandle>) => {
               artist: "Unknown Artist",
               album: "Unknown Album",
               track: "0",
+              path,
             });
             resolve();
           },
