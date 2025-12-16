@@ -20,18 +20,27 @@ export default function NavBar() {
   return (
     <nav className="nav-bar">
       {navItems.map(({ href, icon, label }) => {
-        // Construct the full path including the basePath for comparison
         const fullPath = href === "/" ? basePath : `${basePath}${href}`;
-        const isActive = pathname === fullPath;
+        let isActive;
 
-        const getClassName = () => {
-          if (!isActive) return "";
-          if (href === "/library") return "active-library";
-          return "active";
-        };
+        if (href === "/library") {
+          isActive =
+            pathname.startsWith(`${basePath}/library`) ||
+            pathname.startsWith(`${basePath}/artists`) ||
+            pathname.startsWith(`${basePath}/artist`) ||
+            pathname.startsWith(`${basePath}/albums`) ||
+            pathname.startsWith(`${basePath}/album`) ||
+            pathname.startsWith(`${basePath}/tracks`);
+        } else if (href === "/") {
+          isActive = pathname === fullPath;
+        } else {
+          isActive = pathname.startsWith(fullPath);
+        }
+
+        const className = isActive ? "active" : "";
 
         return (
-          <Link key={href} href={href} className={getClassName()}>
+          <Link key={href} href={href} className={className}>
             {icon}
           </Link>
         );
