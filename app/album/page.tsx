@@ -48,12 +48,14 @@ export default function AlbumPage() {
           );
           const data = await response.json();
           const imageUrl = data.album?.[0]?.strAlbumThumb || "/placeholder.svg";
-          albumData = { name: albumName, artistName, imageUrl };
-          insertAlbum(albumData);
-          setAlbum(albumData);
+          insertAlbum({ name: albumName, artistName, imageUrl });
+          const updatedAlbum = getAlbum(albumName, artistName);
+          setAlbum(updatedAlbum);
         } catch (error) {
           console.error("Error fetching album image:", error);
-          setAlbum({ name: albumName, artistName, imageUrl: "/placeholder.svg" });
+          if (albumData) {
+            setAlbum({ ...albumData, imageUrl: "/placeholder.svg" });
+          }
         }
       }
     };

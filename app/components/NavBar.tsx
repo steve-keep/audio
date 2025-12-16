@@ -20,21 +20,23 @@ export default function NavBar() {
   return (
     <nav className="nav-bar">
       {navItems.map(({ href, icon, label }) => {
-        const fullPath = href === "/" ? basePath : `${basePath}${href}`;
         let isActive;
 
+        // usePathname() doesn't include the basePath, so we compare against the raw href
         if (href === "/library") {
           isActive =
-            pathname.startsWith(`${basePath}/library`) ||
-            pathname.startsWith(`${basePath}/artists`) ||
-            pathname.startsWith(`${basePath}/artist`) ||
-            pathname.startsWith(`${basePath}/albums`) ||
-            pathname.startsWith(`${basePath}/album`) ||
-            pathname.startsWith(`${basePath}/tracks`);
+            pathname.startsWith('/library') ||
+            pathname.startsWith('/artists') ||
+            pathname.startsWith('/artist') ||
+            pathname.startsWith('/albums') ||
+            pathname.startsWith('/album') ||
+            pathname.startsWith('/tracks');
         } else if (href === "/") {
-          isActive = pathname === fullPath;
+          // Exact match for the home page
+          isActive = pathname === href;
         } else {
-          isActive = pathname.startsWith(fullPath);
+          // StartsWith match for other pages like /search
+          isActive = pathname.startsWith(href);
         }
 
         const className = isActive ? "active" : "";
