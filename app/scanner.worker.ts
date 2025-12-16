@@ -3,16 +3,11 @@
 
 import jsmediatags from "jsmediatags";
 
-interface Track {
-  title: string;
-  artist: string;
-  album: string;
-  track: string;
-}
+import type { RawTrack } from "./database";
 
 self.onmessage = async (event: MessageEvent<FileSystemDirectoryHandle>) => {
   const directoryHandle = event.data;
-  const tracks: Track[] = [];
+  const tracks: RawTrack[] = [];
   const filesToProcess: File[] = [];
 
   try {

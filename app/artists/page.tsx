@@ -11,30 +11,29 @@ export default function ArtistsPage() {
   useEffect(() => {
     const fetchArtists = async () => {
       await initDB();
-      const artistNames = getArtists();
-      const artistData = await Promise.all(
-        artistNames.map(async (name) => {
-          let artist = getArtist(name);
-          if (artist && artist.imageUrl) {
+      const artistsFromDB = getArtists();
+      const artistsWithImages = await Promise.all(
+        artistsFromDB.map(async (artist) => {
+          if (artist.imageUrl) {
             return artist;
           }
 
           try {
             const response = await fetch(
-              `https://www.theaudiodb.com/api/v1/json/${API_KEY}/search.php?s=${name}`
+              `https://www.theaudiodb.com/api/v1/json/${API_KEY}/search.php?s=${artist.name}`
             );
             const data = await response.json();
             const imageUrl = data.artists?.[0]?.strArtistThumb || "/placeholder.svg";
-            artist = { name, imageUrl };
-            insertArtist(artist);
-            return artist;
+            const updatedArtist = { ...artist, imageUrl };
+            insertArtist({ name: updatedArtist.name, imageUrl: updatedArtist.imageUrl });
+            return updatedArtist;
           } catch (error) {
             console.error("Error fetching artist image:", error);
-            return { name, imageUrl: "/placeholder.svg" };
+            return { ...artist, imageUrl: "/placeholder.svg" };
           }
         })
       );
-      setArtists(artistData);
+      setArtists(artistsWithImages);
     };
     fetchArtists();
   }, []);

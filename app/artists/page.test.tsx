@@ -22,22 +22,16 @@ describe('Artists page integration test', () => {
   });
 
   it('should render the main page with a list of artists', async () => {
-    const mockArtists = ['Artist 1', 'Artist 2'];
+    const mockArtists = [
+      { id: 1, name: 'Artist 1', imageUrl: 'http://example.com/artist1.jpg' },
+      { id: 2, name: 'Artist 2', imageUrl: null },
+    ];
     (database.getArtists as vi.Mock).mockReturnValue(mockArtists);
 
-    // Mock getArtist to return a valid artist object for the first artist
-    (database.getArtist as vi.Mock).mockImplementation((name) => {
-        if (name === 'Artist 1') {
-            return { name: 'Artist 1', imageUrl: 'http://example.com/artist1.jpg' };
-        }
-        return null;
-    });
-
-
-    // Mock fetch for the second artist
+    // Mock fetch for the second artist which has a null imageUrl
     (global.fetch as vi.Mock).mockResolvedValueOnce({
-        json: () => Promise.resolve({ artists: [{ strArtistThumb: 'http://example.com/artist2.jpg' }] }),
-      });
+      json: () => Promise.resolve({ artists: [{ strArtistThumb: 'http://example.com/artist2.jpg' }] }),
+    });
 
     render(<ArtistsPage />);
 
@@ -53,9 +47,8 @@ describe('Artists page integration test', () => {
   });
 
   it('should display a placeholder image when fetching an image fails', async () => {
-    const mockArtists = ['Artist 3'];
+    const mockArtists = [{ id: 3, name: 'Artist 3', imageUrl: null }];
     (database.getArtists as vi.Mock).mockReturnValue(mockArtists);
-    (database.getArtist as vi.Mock).mockReturnValue(null);
     (global.fetch as vi.Mock).mockRejectedValueOnce(new Error('API Error'));
 
     render(<ArtistsPage />);
