@@ -64,13 +64,6 @@ export async function initDB() {
 export function createTables() {
   if (!db) return;
   const query = `
-    CREATE TABLE IF NOT EXISTS tracks (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      artist TEXT,
-      album TEXT,
-      track TEXT
-    );
     CREATE TABLE IF NOT EXISTS artists (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE,
@@ -79,71 +72,156 @@ export function createTables() {
     CREATE TABLE IF NOT EXISTS albums (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT,
-      artistName TEXT,
+      artist_id INTEGER,
       imageUrl TEXT,
-      UNIQUE(name, artistName)
+      FOREIGN KEY(artist_id) REFERENCES artists(id),
+      UNIQUE(name, artist_id)
+    );
+    CREATE TABLE IF NOT EXISTS tracks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      track TEXT,
+      album_id INTEGER,
+      artist_id INTEGER,
+      FOREIGN KEY(album_id) REFERENCES albums(id),
+      FOREIGN KEY(artist_id) REFERENCES artists(id)
     );
   `;
   db.run(query);
 }
 
 export interface Track {
+  id: number;
+  title: string;
+  track: string;
+  album_id: number;
+  artist_id: number;
+}
+
+export interface Artist {
+  id: number;
+  name: string;
+  imageUrl: string;
+}
+
+export interface Album {
+  id: number;
+  name: string;
+  artist_id: number;
+  imageUrl: string;
+}
+
+export interface RawTrack {
   title: string;
   artist: string;
   album: string;
   track: string;
 }
 
-export interface Artist {
-  name: string;
-  imageUrl: string;
-}
+function getOrInsertArtistId(artistName: string): number {
+  if (!db) throw new Error("Database not initialized");
 
-export interface Album {
-  name: string;
-  artistName: string;
-  imageUrl: string;
-}
-
-export function insertTrack(track: Track) {
-  if (!db) return;
-  const stmt = db.prepare(
-    "INSERT INTO tracks (title, artist, album, track) VALUES (?, ?, ?, ?)"
-  );
-  stmt.run([track.title, track.artist, track.album, track.track]);
-  stmt.free();
-}
-
-export function insertArtist(artist: Artist) {
-  if (!db) return;
-  const stmt = db.prepare(
-    "INSERT OR IGNORE INTO artists (name, imageUrl) VALUES (?, ?)"
-  );
-  stmt.run([artist.name, artist.imageUrl]);
-  stmt.free();
-}
-
-export function insertAlbum(album: Album) {
-  if (!db) return;
-  const stmt = db.prepare(
-    "INSERT OR IGNORE INTO albums (name, artistName, imageUrl) VALUES (?, ?, ?)"
-  );
-  stmt.run([album.name, album.artistName, album.imageUrl]);
-  stmt.free();
-}
-
-export function getArtists() {
-  if (!db) return [];
-  const res = db.exec("SELECT DISTINCT artist FROM tracks ORDER BY artist");
-  if (res.length === 0) {
-    return [];
+  const selectStmt = db.prepare("SELECT id FROM artists WHERE name = ?");
+  selectStmt.bind([artistName]);
+  if (selectStmt.step()) {
+    const id = selectStmt.get()[0] as number;
+    selectStmt.free();
+    return id;
   }
-  return res[0].values.map((row) => row?.[0] as string);
+  selectStmt.free();
+
+  const insertStmt = db.prepare("INSERT INTO artists (name) VALUES (?)");
+  insertStmt.run([artistName]);
+  insertStmt.free();
+
+  const lastId = db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
+  return lastId;
+}
+
+function getOrInsertAlbumId(albumName: string, artistId: number): number {
+  if (!db) throw new Error("Database not initialized");
+
+  const selectStmt = db.prepare("SELECT id FROM albums WHERE name = ? AND artist_id = ?");
+  selectStmt.bind([albumName, artistId]);
+  if (selectStmt.step()) {
+    const id = selectStmt.get()[0] as number;
+    selectStmt.free();
+    return id;
+  }
+  selectStmt.free();
+
+  const insertStmt = db.prepare("INSERT INTO albums (name, artist_id) VALUES (?, ?)");
+  insertStmt.run([albumName, artistId]);
+  insertStmt.free();
+
+  const lastId = db.exec("SELECT last_insert_rowid()")[0].values[0][0] as number;
+  return lastId;
+}
+
+
+export function insertTrack(track: RawTrack) {
+  if (!db) return;
+
+  const artistId = getOrInsertArtistId(track.artist);
+  const albumId = getOrInsertAlbumId(track.album, artistId);
+
+  const stmt = db.prepare(
+    "INSERT INTO tracks (title, track, album_id, artist_id) VALUES (?, ?, ?, ?)"
+  );
+  stmt.run([track.title, track.track, albumId, artistId]);
+  stmt.free();
+}
+
+export function insertArtist(artist: { name: string, imageUrl: string }) {
+  if (!db) return;
+  const stmt = db.prepare(
+    "UPDATE artists SET imageUrl = ? WHERE name = ?"
+  );
+  stmt.run([artist.imageUrl, artist.name]);
+  stmt.free();
+}
+
+export function insertAlbum(album: { name: string, artistName: string, imageUrl: string }) {
+  if (!db) return;
+  const artistStmt = db.prepare("SELECT id FROM artists WHERE name = ?");
+  artistStmt.bind([album.artistName]);
+  if (!artistStmt.step()) {
+    artistStmt.free();
+    return; // Artist not found
+  }
+  const artistId = artistStmt.get()[0] as number;
+  artistStmt.free();
+
+  const albumStmt = db.prepare(
+    "UPDATE albums SET imageUrl = ? WHERE name = ? AND artist_id = ?"
+  );
+  albumStmt.run([album.imageUrl, album.name, artistId]);
+  albumStmt.free();
+}
+
+export interface AlbumWithArtist extends Album {
+  artistName: string;
+}
+
+export interface TrackWithAlbumAndArtist extends Track {
+  artistName: string;
+  albumName: string;
+}
+
+export function getArtists(): Artist[] {
+  if (!db) return [];
+  const stmt = db.prepare("SELECT id, name, imageUrl FROM artists ORDER BY name");
+  const artists: Artist[] = [];
+  while (stmt.step()) {
+    artists.push(stmt.getAsObject() as unknown as Artist);
+  }
+  stmt.free();
+  return artists;
 }
 
 export function getArtist(artistName: string): Artist | null {
   if (!db) return null;
-  const stmt = db.prepare("SELECT name, imageUrl FROM artists WHERE name = ?");
+  const stmt = db.prepare("SELECT id, name, imageUrl FROM artists WHERE name = ?");
   stmt.bind([artistName]);
   if (stmt.step()) {
     const result = stmt.getAsObject() as unknown as Artist;
@@ -154,70 +232,89 @@ export function getArtist(artistName: string): Artist | null {
   return null;
 }
 
-export function getAlbum(albumName: string, artistName: string): Album | null {
+export function getAlbum(albumName: string, artistName: string): AlbumWithArtist | null {
   if (!db) return null;
-  const stmt = db.prepare(
-    "SELECT name, artistName, imageUrl FROM albums WHERE name = ? AND artistName = ?"
-  );
+  const stmt = db.prepare(`
+      SELECT a.id, a.name, a.artist_id, a.imageUrl, r.name as artistName
+      FROM albums a
+      JOIN artists r ON a.artist_id = r.id
+      WHERE a.name = ? AND r.name = ?
+  `);
   stmt.bind([albumName, artistName]);
   if (stmt.step()) {
-    const result = stmt.getAsObject() as unknown as Album;
-    stmt.free();
-    return result;
+      const result = stmt.getAsObject() as unknown as AlbumWithArtist;
+      stmt.free();
+      return result;
   }
   stmt.free();
   return null;
 }
 
-export function getAlbumsByArtist(artistName: string) {
+export function getAlbumsByArtist(artistName: string): AlbumWithArtist[] {
   if (!db) return [];
   const stmt = db.prepare(
-    "SELECT DISTINCT album FROM tracks WHERE artist = ? ORDER BY album"
+    `SELECT a.id, a.name, a.artist_id, a.imageUrl, r.name as artistName
+     FROM albums a
+     JOIN artists r ON a.artist_id = r.id
+     WHERE r.name = ?
+     ORDER BY a.name`
   );
   stmt.bind([artistName]);
-  const albums: string[] = [];
+  const albums: AlbumWithArtist[] = [];
   while (stmt.step()) {
-    albums.push(stmt.get()[0] as string);
+    albums.push(stmt.getAsObject() as unknown as AlbumWithArtist);
   }
   stmt.free();
   return albums;
 }
 
-export function getTracksByAlbumAndArtist(albumName: string, artistName: string): Track[] {
+export function getTracksByAlbumAndArtist(albumName: string, artistName: string): TrackWithAlbumAndArtist[] {
   if (!db) return [];
-  const stmt = db.prepare(
-    "SELECT title, artist, album, track FROM tracks WHERE album = ? AND artist = ? ORDER BY CAST(track AS INTEGER)"
-  );
+  const stmt = db.prepare(`
+      SELECT t.id, t.title, t.track, t.album_id, t.artist_id, r.name as artistName, a.name as albumName
+      FROM tracks t
+      JOIN artists r ON t.artist_id = r.id
+      JOIN albums a ON t.album_id = a.id
+      WHERE a.name = ? AND r.name = ?
+      ORDER BY CAST(t.track AS INTEGER)
+  `);
   stmt.bind([albumName, artistName]);
-  const tracks: Track[] = [];
+  const tracks: TrackWithAlbumAndArtist[] = [];
   while (stmt.step()) {
-    tracks.push(stmt.getAsObject() as unknown as Track);
+      tracks.push(stmt.getAsObject() as unknown as TrackWithAlbumAndArtist);
   }
   stmt.free();
   return tracks;
 }
 
-export function getAllAlbums(): Album[] {
+export function getAllAlbums(): AlbumWithArtist[] {
   if (!db) return [];
-  const stmt = db.prepare(
-    "SELECT name, artistName, imageUrl FROM albums ORDER BY name"
-  );
-  const albums: Album[] = [];
+  const stmt = db.prepare(`
+      SELECT a.id, a.name, a.artist_id, a.imageUrl, r.name as artistName
+      FROM albums a
+      JOIN artists r ON a.artist_id = r.id
+      ORDER BY a.name
+  `);
+  const albums: AlbumWithArtist[] = [];
   while (stmt.step()) {
-    albums.push(stmt.getAsObject() as unknown as Album);
+      albums.push(stmt.getAsObject() as unknown as AlbumWithArtist);
   }
   stmt.free();
   return albums;
 }
 
-export function getAllTracks(): Track[] {
+export function getAllTracks(): TrackWithAlbumAndArtist[] {
   if (!db) return [];
-  const stmt = db.prepare(
-    "SELECT title, artist, album, track FROM tracks ORDER BY artist, album, CAST(track AS INTEGER)"
-  );
-  const tracks: Track[] = [];
+  const stmt = db.prepare(`
+      SELECT t.id, t.title, t.track, t.album_id, t.artist_id, r.name as artistName, a.name as albumName
+      FROM tracks t
+      JOIN artists r ON t.artist_id = r.id
+      JOIN albums a ON t.album_id = a.id
+      ORDER BY r.name, a.name, CAST(t.track AS INTEGER)
+  `);
+  const tracks: TrackWithAlbumAndArtist[] = [];
   while (stmt.step()) {
-    tracks.push(stmt.getAsObject() as unknown as Track);
+      tracks.push(stmt.getAsObject() as unknown as TrackWithAlbumAndArtist);
   }
   stmt.free();
   return tracks;

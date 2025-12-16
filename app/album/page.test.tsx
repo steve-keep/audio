@@ -61,14 +61,17 @@ describe('AlbumPage', () => {
   });
 
   it('should fetch album art from API if not in local DB', async () => {
-    (database.getAlbum as vi.Mock).mockReturnValue(null); // Not in DB
+    const incompleteAlbum = { ...mockAlbum, imageUrl: null };
+    const completeAlbum = { ...mockAlbum, imageUrl: 'http://example.com/api.jpg' };
+    (database.getAlbum as vi.Mock)
+      .mockReturnValueOnce(incompleteAlbum) // Initial call
+      .mockReturnValueOnce(completeAlbum); // After insert
+
     (global.fetch as vi.Mock).mockResolvedValueOnce({
-        json: () => Promise.resolve({ album: [{ strAlbumThumb: 'http://example.com/api.jpg' }] }),
+      json: () => Promise.resolve({ album: [{ strAlbumThumb: 'http://example.com/api.jpg' }] }),
     });
 
-    await act(async () => {
-        render(<AlbumPage />);
-    });
+    render(<AlbumPage />);
 
     await waitFor(() => {
       expect(screen.getByAltText(mockAlbumName)).toHaveAttribute('src', 'http://example.com/api.jpg');
