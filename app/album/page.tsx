@@ -38,10 +38,8 @@ export default function AlbumPage() {
       setTracks(trackData);
 
       // Fetch album details for the cover art
-      let albumData = getAlbum(albumName, artistName);
-      if (albumData && albumData.imageUrl) {
-        setAlbum(albumData);
-      } else {
+      const albumData = getAlbum(albumName, artistName);
+      if (albumData && !albumData.imageUrl) {
         try {
           const response = await fetch(
             `https://www.theaudiodb.com/api/v1/json/${API_KEY}/searchalbum.php?s=${artistName}&a=${albumName}`
@@ -57,6 +55,8 @@ export default function AlbumPage() {
             setAlbum({ ...albumData, imageUrl: "/placeholder.svg" });
           }
         }
+      } else {
+        setAlbum(albumData);
       }
     };
 
