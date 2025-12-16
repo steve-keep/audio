@@ -1,6 +1,6 @@
 {
-  "name": "My Music Library",
-  "short_name": "Music Library",
+  "name": "skeep",
+  "short_name": "skeep",
   "description": "An audio file indexer application.",
   "start_url": "/audio/",
   "display": "standalone",
