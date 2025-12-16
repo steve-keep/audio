@@ -13,26 +13,30 @@ async function scan() {
   if (!directoryHandle) return;
 
   self.postMessage({ type: "state", payload: "scanning" });
+  console.time("Scanning and parsing metadata");
 
-  const currentFilePaths = new Set<string>();
+  const newTracks: RawTrack[] = [];
+  const allFilePaths = new Set<string>();
+  const promises: Promise<void>[] = [];
 
   async function scanDirectory(dirHandle: FileSystemDirectoryHandle, path: string) {
     for await (const entry of dirHandle.values()) {
       const entryPath = path ? `${path}/${entry.name}` : entry.name;
 
       if (entry.kind === "file") {
+        allFilePaths.add(entryPath);
         const lowerCaseName = entry.name.toLowerCase();
         if (lowerCaseName.endsWith(".mp3") || lowerCaseName.endsWith(".flac")) {
-          currentFilePaths.add(entryPath);
-
           if (!knownFilePaths.has(entryPath)) {
-            try {
-              const file = await entry.getFile();
-              const track = await parseMetadata(file);
-              self.postMessage({ type: "added", payload: [{ ...track, path: entryPath }] });
-            } catch (error) {
-              console.error(`Error processing file ${entryPath}:`, error);
-            }
+            promises.push((async () => {
+              try {
+                const file = await entry.getFile();
+                const track = await parseMetadata(file);
+                newTracks.push({ ...track, path: entryPath });
+              } catch (error) {
+                console.error(`Error processing file ${entryPath}:`, error);
+              }
+            })());
           }
         }
       } else if (entry.kind === "directory") {
@@ -42,14 +46,21 @@ async function scan() {
   }
 
   await scanDirectory(directoryHandle, "");
+  await Promise.all(promises);
 
-  const deletedFilePaths = [...knownFilePaths].filter(path => !currentFilePaths.has(path));
+  const deletedFilePaths = [...knownFilePaths].filter(path => !allFilePaths.has(path));
 
   if (deletedFilePaths.length > 0) {
     self.postMessage({ type: "deleted", payload: deletedFilePaths });
   }
 
-  knownFilePaths = currentFilePaths;
+  if (newTracks.length > 0) {
+    self.postMessage({ type: "added", payload: newTracks });
+  }
+
+  console.timeEnd("Scanning and parsing metadata");
+
+  knownFilePaths = allFilePaths;
   self.postMessage({ type: "state", payload: "idle" });
 }
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   initDB,
   insertTrack,
+  bulkInsertTracks,
   saveDbToIndexedDB,
   exportDB,
   restoreDB,
@@ -75,11 +76,11 @@ export default function Settings() {
         setBackgroundScanStatus(payload);
         setIsBackgroundScanning(payload === "scanning");
       } else if (type === "added") {
+        console.time("Bulk inserting tracks");
         const tracks = payload as Track[];
-        for (const track of tracks) {
-          insertTrack(track);
-        }
+        bulkInsertTracks(tracks);
         await saveDbToIndexedDB();
+        console.timeEnd("Bulk inserting tracks");
         setArtistCount(getArtistCount());
       } else if (type === "deleted") {
         const deletedPaths = payload as string[];

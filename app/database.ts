@@ -187,6 +187,30 @@ export function insertTrack(track: RawTrack) {
   stmt.free();
 }
 
+export function bulkInsertTracks(tracks: RawTrack[]) {
+  if (!db) return;
+
+  db.exec("BEGIN TRANSACTION");
+  try {
+    const stmt = db.prepare(
+      "INSERT OR IGNORE INTO tracks (title, track, path, album_id, artist_id) VALUES (?, ?, ?, ?, ?)"
+    );
+
+    for (const track of tracks) {
+      const artistId = getOrInsertArtistId(track.artist);
+      const albumId = getOrInsertAlbumId(track.album, artistId);
+      stmt.run([track.title, track.track, track.path, albumId, artistId]);
+    }
+
+    stmt.free();
+    db.exec("COMMIT");
+  } catch (e) {
+    console.error("Bulk insert failed, rolling back.", e);
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 export function deleteTrackByPath(path: string) {
   if (!db) return;
 
