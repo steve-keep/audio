@@ -234,6 +234,11 @@ export default function Settings() {
       >
         Delete Database
       </button>
+      {process.env.NEXT_PUBLIC_RELEASE_VERSION && (
+        <div style={{ textAlign: "center", marginTop: "2rem", color: "#888" }}>
+          <p>{process.env.NEXT_PUBLIC_RELEASE_VERSION}</p>
+        </div>
+      )}
     </main>
   );
 }
