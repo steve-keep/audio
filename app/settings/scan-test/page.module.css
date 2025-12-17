@@ -1,0 +1,10 @@
+.container {
+  padding: 1rem;
+}
+
+.fileList {
+  list-style-type: none;
+  padding: 0;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
