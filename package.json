@@ -13,7 +13,9 @@
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
     "@types/jsmediatags": "^3.9.6",
+    "copy-webpack-plugin": "^13.0.1",
     "jsmediatags": "^3.9.7",
+    "music-metadata-browser": "^2.5.11",
     "next": "14.2.4",
     "react": "^18",
     "react-dom": "^18",
