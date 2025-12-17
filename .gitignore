@@ -42,3 +42,8 @@ next-env.d.ts
 
 # log files
 *.log
+
+# PWA files
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
