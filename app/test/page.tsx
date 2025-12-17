@@ -25,6 +25,7 @@ const TestPage = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [status, setStatus] = useState('');
+  const [errors, setErrors] = useState<string[]>([]);
   const [isTaglibScriptLoaded, setIsTaglibScriptLoaded] = useState(false);
   const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
 
@@ -83,9 +84,11 @@ const TestPage = () => {
 
   const runPerformanceTest = async (files: FileSystemFileHandle[], library: string) => {
     setResults([]);
+    setErrors([]);
     setStatus(`Testing ${library}...`);
     const startTime = performance.now();
     let filesProcessed = 0;
+    const newErrors: string[] = [];
 
     try {
       if (library === 'jsmediatags') {
@@ -115,10 +118,12 @@ const TestPage = () => {
               const data = new Uint8Array(arrayBuffer);
               const tfile = await taglib.open(data, file.name);
               tfile.tag(); // Read the tag
-              tfile.delete(); // IMPORTANT: Clean up WASM memory
+              tfile.dispose(); // IMPORTANT: Clean up WASM memory
               filesProcessed++;
             } catch (error) {
-              console.error(`taglib-wasm failed to process ${fileHandle.name}:`, error);
+              const errorMessage = `taglib-wasm failed to process ${fileHandle.name}: ${error instanceof Error ? error.message : String(error)}`;
+              console.error(errorMessage);
+              newErrors.push(errorMessage);
             }
           }
         } else {
@@ -131,11 +136,13 @@ const TestPage = () => {
       // Stop the timer and update results even if there was an error
       const endTime = performance.now();
       setResults([{ library, filesProcessed, timeTaken: endTime - startTime }]);
+      setErrors(newErrors);
       return; // Exit the function
     }
 
     const endTime = performance.now();
     setResults([{ library, filesProcessed, timeTaken: endTime - startTime }]);
+    setErrors(newErrors);
   };
 
   const handleRunTest = async () => {
@@ -180,6 +187,17 @@ const TestPage = () => {
        {!isTaglibScriptLoaded && <p>Loading metadata library...</p>}
 
       {status && <p>{status}</p>}
+
+      {errors.length > 0 && (
+        <div className={styles.errors}>
+          <h2>Errors</h2>
+          <ul>
+            {errors.map((error, index) => (
+              <li key={index}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {results.length > 0 && (
         <div className={styles.results}>
