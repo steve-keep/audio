@@ -26,6 +26,7 @@ const TestPage = () => {
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [status, setStatus] = useState('');
   const [isTaglibScriptLoaded, setIsTaglibScriptLoaded] = useState(false);
+  const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
 
   useEffect(() => {
     // Check if the script is already loaded
@@ -80,72 +81,76 @@ const TestPage = () => {
     return files;
   };
 
-  const runPerformanceTests = async (files: FileSystemFileHandle[]) => {
-    // --- jsmediatags ---
-    setStatus('Testing jsmediatags...');
-    let startTime = performance.now();
-    for (const fileHandle of files) {
-      const file = await fileHandle.getFile();
-      await new Promise<void>((resolve, reject) => {
-        jsmediatags.read(file, { onSuccess: () => resolve(), onError: (e) => reject(e) });
-      });
-    }
-    let endTime = performance.now();
-    setResults(prev => [...prev, { library: 'jsmediatags', filesProcessed: files.length, timeTaken: endTime - startTime }]);
+  const runPerformanceTest = async (files: FileSystemFileHandle[], library: string) => {
+    setResults([]);
+    setStatus(`Testing ${library}...`);
+    const startTime = performance.now();
+    let filesProcessed = 0;
 
-    // --- music-metadata-browser ---
-    setStatus('Testing music-metadata-browser...');
-    startTime = performance.now();
-    for (const fileHandle of files) {
-      const file = await fileHandle.getFile();
-      await mm.parseBlob(file);
-    }
-    endTime = performance.now();
-    setResults(prev => [...prev, { library: 'music-metadata-browser', filesProcessed: files.length, timeTaken: endTime - startTime }]);
-
-    // --- taglib-wasm ---
-    if (isTaglibScriptLoaded && window.taglibWasm) {
-      setStatus('Testing taglib-wasm...');
-      startTime = performance.now();
-      try {
-        const taglib = await window.taglibWasm.TagLib.initialize({
-          locateFile: (path: string) => (path.endsWith('.wasm') ? '/audio/vendor/taglib-wasm/taglib.wasm' : path),
-        });
-
+    try {
+      if (library === 'jsmediatags') {
         for (const fileHandle of files) {
-          try {
-            const file = await fileHandle.getFile();
-            const arrayBuffer = await file.arrayBuffer();
-            const data = new Uint8Array(arrayBuffer);
-            const tfile = await taglib.open(data, file.name);
-            tfile.tag(); // Read the tag
-            tfile.delete(); // IMPORTANT: Clean up WASM memory
-          } catch (error) {
-            console.error(`taglib-wasm failed to process ${fileHandle.name}:`, error);
-          }
+          const file = await fileHandle.getFile();
+          await new Promise<void>((resolve, reject) => {
+            jsmediatags.read(file, { onSuccess: () => resolve(), onError: (e) => reject(e) });
+          });
+          filesProcessed++;
         }
-      } catch (error) {
-        console.error('Failed to initialize taglib-wasm:', error);
+      } else if (library === 'music-metadata-browser') {
+        for (const fileHandle of files) {
+          const file = await fileHandle.getFile();
+          await mm.parseBlob(file);
+          filesProcessed++;
+        }
+      } else if (library === 'taglib-wasm') {
+        if (isTaglibScriptLoaded && window.taglibWasm) {
+          const taglib = await window.taglibWasm.TagLib.initialize({
+            locateFile: (path: string) => (path.endsWith('.wasm') ? '/audio/vendor/taglib-wasm/taglib.wasm' : path),
+          });
+
+          for (const fileHandle of files) {
+            try {
+              const file = await fileHandle.getFile();
+              const arrayBuffer = await file.arrayBuffer();
+              const data = new Uint8Array(arrayBuffer);
+              const tfile = await taglib.open(data, file.name);
+              tfile.tag(); // Read the tag
+              tfile.delete(); // IMPORTANT: Clean up WASM memory
+              filesProcessed++;
+            } catch (error) {
+              console.error(`taglib-wasm failed to process ${fileHandle.name}:`, error);
+            }
+          }
+        } else {
+          throw new Error('taglib-wasm is not loaded.');
+        }
       }
-      endTime = performance.now();
-      setResults(prev => [...prev, { library: 'taglib-wasm', filesProcessed: files.length, timeTaken: endTime - startTime }]);
+    } catch (error) {
+      setStatus(`Error during testing ${library}: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(error);
+      // Stop the timer and update results even if there was an error
+      const endTime = performance.now();
+      setResults([{ library, filesProcessed, timeTaken: endTime - startTime }]);
+      return; // Exit the function
     }
+
+    const endTime = performance.now();
+    setResults([{ library, filesProcessed, timeTaken: endTime - startTime }]);
   };
 
-  const handleStart = async () => {
-    if (!directory || !isTaglibScriptLoaded) return;
+  const handleRunTest = async () => {
+    if (!directory) return;
 
     setIsScanning(true);
-    setResults([]);
     setStatus('Scanning directory for audio files...');
 
     const audioFiles = await getAllFiles(directory);
-    setStatus(`Found ${audioFiles.length} audio files. Now running tests...`);
+    setStatus(`Found ${audioFiles.length} audio files. Now running test...`);
 
-    await runPerformanceTests(audioFiles);
+    await runPerformanceTest(audioFiles, selectedLibrary);
 
     setIsScanning(false);
-    setStatus(`Testing complete. Processed ${audioFiles.length} files.`);
+    setStatus(`Testing complete. Processed ${audioFiles.length} files with ${selectedLibrary}.`);
   };
 
 
@@ -156,8 +161,20 @@ const TestPage = () => {
         <button onClick={handleDirectorySelection} disabled={isScanning}>
            {directory ? `Selected: ${directory.name}` : 'Select Directory'}
         </button>
-        <button onClick={handleStart} disabled={!directory || isScanning || !isTaglibScriptLoaded}>
-          {isScanning ? 'Scanning...' : 'Start Test'}
+        <select value={selectedLibrary} onChange={(e) => setSelectedLibrary(e.target.value)}>
+          <option value="jsmediatags">jsmediatags</option>
+          <option value="music-metadata-browser">music-metadata-browser</option>
+          <option value="taglib-wasm">taglib-wasm</option>
+        </select>
+        <button
+          onClick={handleRunTest}
+          disabled={
+            !directory ||
+            isScanning ||
+            (selectedLibrary === 'taglib-wasm' && !isTaglibScriptLoaded)
+          }
+        >
+          {isScanning ? 'Scanning...' : 'Run Test'}
         </button>
       </div>
        {!isTaglibScriptLoaded && <p>Loading metadata library...</p>}
