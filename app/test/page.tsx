@@ -26,6 +26,7 @@ const TestPage = () => {
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [status, setStatus] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
+  const [tags, setTags] = useState<any[]>([]);
   const [isTaglibScriptLoaded, setIsTaglibScriptLoaded] = useState(false);
   const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
 
@@ -85,24 +86,33 @@ const TestPage = () => {
   const runPerformanceTest = async (files: FileSystemFileHandle[], library: string) => {
     setResults([]);
     setErrors([]);
+    setTags([]);
     setStatus(`Testing ${library}...`);
     const startTime = performance.now();
     let filesProcessed = 0;
     const newErrors: string[] = [];
+    const newTags: any[] = [];
 
     try {
       if (library === 'jsmediatags') {
         for (const fileHandle of files) {
           const file = await fileHandle.getFile();
           await new Promise<void>((resolve, reject) => {
-            jsmediatags.read(file, { onSuccess: () => resolve(), onError: (e) => reject(e) });
+            jsmediatags.read(file, {
+              onSuccess: (tag) => {
+                newTags.push(tag.tags);
+                resolve();
+              },
+              onError: (e) => reject(e),
+            });
           });
           filesProcessed++;
         }
       } else if (library === 'music-metadata-browser') {
         for (const fileHandle of files) {
           const file = await fileHandle.getFile();
-          await mm.parseBlob(file);
+          const metadata = await mm.parseBlob(file);
+          newTags.push(metadata.common);
           filesProcessed++;
         }
       } else if (library === 'taglib-wasm') {
@@ -117,7 +127,15 @@ const TestPage = () => {
               const arrayBuffer = await file.arrayBuffer();
               const data = new Uint8Array(arrayBuffer);
               const tfile = await taglib.open(data, file.name);
-              tfile.tag(); // Read the tag
+              const tags = tfile.tag();
+              newTags.push({
+                title: tags.title,
+                artist: tags.artist,
+                album: tags.album,
+                year: tags.year,
+                track: tags.track,
+                genre: tags.genre,
+              });
               tfile.dispose(); // IMPORTANT: Clean up WASM memory
               filesProcessed++;
             } catch (error) {
@@ -143,6 +161,7 @@ const TestPage = () => {
     const endTime = performance.now();
     setResults([{ library, filesProcessed, timeTaken: endTime - startTime }]);
     setErrors(newErrors);
+    setTags(newTags);
   };
 
   const handleRunTest = async () => {
@@ -216,6 +235,36 @@ const TestPage = () => {
                   <td>{result.library}</td>
                   <td>{result.filesProcessed}</td>
                   <td>{result.timeTaken.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tags.length > 0 && (
+        <div className={styles.results}>
+          <h2>Extracted Tags</h2>
+          <table className={styles.resultsTable}>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Artist</th>
+                <th>Album</th>
+                <th>Year</th>
+                <th>Track</th>
+                <th>Genre</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tags.map((tag, index) => (
+                <tr key={index}>
+                  <td>{tag.title}</td>
+                  <td>{tag.artist}</td>
+                  <td>{tag.album}</td>
+                  <td>{tag.year}</td>
+                  <td>{tag.track}</td>
+                  <td>{tag.genre}</td>
                 </tr>
               ))}
             </tbody>
