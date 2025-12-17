@@ -74,10 +74,8 @@ describe("Background Scanner Worker", () => {
 
     const startMessage = {
       type: "start",
-      payload: {
-        directoryHandle: mockDirectoryHandle,
-        knownFilePaths: new Set(),
-      },
+      directoryHandle: mockDirectoryHandle,
+      knownFilePaths: [],
     };
 
     // Manually trigger the worker's onmessage. This is async but doesn't await scan().
@@ -105,7 +103,7 @@ describe("Background Scanner Worker", () => {
     const addedMessages = postMessageCalls.filter(
       (call: any) => call.type === "added"
     );
-    expect(addedMessages.length).toBe(2);
+    expect(addedMessages.length).toBe(1);
 
     const addedPayloads = addedMessages.flatMap((call: any) => call.payload);
 

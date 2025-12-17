@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
   initDB,
-  insertTrack,
   bulkInsertTracks,
   saveDbToIndexedDB,
   exportDB,
@@ -16,6 +15,7 @@ import {
   deleteTrackByPath,
   getArtistCount,
 } from "../database";
+import { addLog, exportLogsAsText } from "../logger";
 
 import { RawTrack } from "../database";
 
@@ -27,6 +27,7 @@ export default function Settings() {
   const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
   const [backgroundScanStatus, setBackgroundScanStatus] = useState("Inactive");
   const [artistCount, setArtistCount] = useState(0);
+  const [logs, setLogs] = useState<string[]>([]);
 
   const backgroundWorkerRef = useRef<Worker | null>(null);
 
@@ -50,23 +51,31 @@ export default function Settings() {
       event: MessageEvent<{ type: string; payload: any }>
     ) => {
       const { type, payload } = event.data;
-      if (type === "state") {
-        setBackgroundScanStatus(payload);
-        setIsBackgroundScanning(payload === "scanning");
-      } else if (type === "added") {
-        console.time("Bulk inserting tracks");
-        const tracks = payload as Track[];
-        bulkInsertTracks(tracks);
-        await saveDbToIndexedDB();
-        console.timeEnd("Bulk inserting tracks");
-        setArtistCount(getArtistCount());
-      } else if (type === "deleted") {
-        const deletedPaths = payload as string[];
-        for (const path of deletedPaths) {
-          deleteTrackByPath(path);
-        }
-        await saveDbToIndexedDB();
-        setArtistCount(getArtistCount());
+      switch (type) {
+        case "state":
+          setBackgroundScanStatus(payload);
+          setIsBackgroundScanning(payload === "scanning");
+          break;
+        case "log":
+          addLog(payload);
+          setLogs((prevLogs) => [...prevLogs, payload]);
+          break;
+        case "added":
+          console.time("Bulk inserting tracks");
+          const tracks = payload as Track[];
+          bulkInsertTracks(tracks);
+          await saveDbToIndexedDB();
+          console.timeEnd("Bulk inserting tracks");
+          setArtistCount(getArtistCount());
+          break;
+        case "deleted":
+          const deletedPaths = payload as string[];
+          for (const path of deletedPaths) {
+            deleteTrackByPath(path);
+          }
+          await saveDbToIndexedDB();
+          setArtistCount(getArtistCount());
+          break;
       }
     };
 
@@ -80,7 +89,7 @@ export default function Settings() {
     backgroundWorkerRef.current?.postMessage({
       type: "start",
       directoryHandle,
-      knownFilePaths,
+      knownFilePaths: Array.from(knownFilePaths),
     });
   };
 
@@ -90,13 +99,29 @@ export default function Settings() {
       await saveDirectoryHandle(directoryHandle);
       startBackgroundScan(directoryHandle);
     } catch (error) {
-      console.error("Error selecting directory:", error);
+      if (error instanceof DOMException && error.name === "AbortError") {
+        alert("Directory selection was cancelled.");
+      } else {
+        alert(`An error occurred: ${error}`);
+        console.error("Error selecting directory:", error);
+      }
     }
   };
 
   const handleStopBackgroundScan = async () => {
     await clearDirectoryHandle();
     backgroundWorkerRef.current?.postMessage({ type: "stop" });
+  };
+
+  const handleExportLogs = () => {
+    const logsText = exportLogsAsText();
+    const blob = new Blob([logsText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "scan-logs.txt";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleBackup = () => {
@@ -154,6 +179,20 @@ export default function Settings() {
         <p>The File System Access API is not supported in your browser.</p>
       )}
       <p>Status: {backgroundScanStatus}</p>
+      <button onClick={handleExportLogs}>Export Logs</button>
+      <div
+        style={{
+          height: "200px",
+          overflowY: "auto",
+          border: "1px solid #ccc",
+          padding: "10px",
+          marginTop: "10px",
+        }}
+      >
+        {logs.map((log, index) => (
+          <div key={index}>{log}</div>
+        ))}
+      </div>
       <hr />
       <h2>Database Management</h2>
       <button onClick={handleBackup}>Backup Database</button>
