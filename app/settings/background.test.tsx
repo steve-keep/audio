@@ -77,7 +77,7 @@ describe("Settings page background scanning", () => {
         expect(backgroundWorker?.postMessage).toHaveBeenCalledWith({
           type: "start",
           directoryHandle: mockDirectoryHandle,
-          knownFilePaths: new Set(),
+          knownFilePaths: [],
         });
     });
   });
@@ -131,7 +131,7 @@ describe("Settings page background scanning", () => {
         expect(backgroundWorker?.postMessage).toHaveBeenCalledWith({
             type: 'start',
             directoryHandle: mockDirectoryHandle,
-            knownFilePaths: new Set(),
+            knownFilePaths: [],
         });
     });
   });
