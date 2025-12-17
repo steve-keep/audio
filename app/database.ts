@@ -95,6 +95,8 @@ export function createTables() {
       title TEXT,
       track TEXT,
       path TEXT UNIQUE,
+      lastModified INTEGER,
+      size INTEGER,
       album_id INTEGER,
       artist_id INTEGER,
       FOREIGN KEY(album_id) REFERENCES albums(id),
@@ -131,6 +133,8 @@ export interface RawTrack {
   album: string;
   track: string;
   path: string;
+  lastModified: number;
+  size: number;
 }
 
 function getOrInsertArtistId(artistName: string): number {
@@ -181,9 +185,9 @@ export function insertTrack(track: RawTrack) {
   const albumId = getOrInsertAlbumId(track.album, artistId);
 
   const stmt = db.prepare(
-    "INSERT INTO tracks (title, track, path, album_id, artist_id) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO tracks (title, track, path, lastModified, size, album_id, artist_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
   );
-  stmt.run([track.title, track.track, track.path, albumId, artistId]);
+  stmt.run([track.title, track.track, track.path, track.lastModified, track.size, albumId, artistId]);
   stmt.free();
 }
 
@@ -193,13 +197,13 @@ export function bulkInsertTracks(tracks: RawTrack[]) {
   db.exec("BEGIN TRANSACTION");
   try {
     const stmt = db.prepare(
-      "INSERT OR IGNORE INTO tracks (title, track, path, album_id, artist_id) VALUES (?, ?, ?, ?, ?)"
+      "INSERT OR IGNORE INTO tracks (title, track, path, lastModified, size, album_id, artist_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
 
     for (const track of tracks) {
       const artistId = getOrInsertArtistId(track.artist);
       const albumId = getOrInsertAlbumId(track.album, artistId);
-      stmt.run([track.title, track.track, track.path, albumId, artistId]);
+      stmt.run([track.title, track.track, track.path, track.lastModified, track.size, albumId, artistId]);
     }
 
     stmt.free();
@@ -376,6 +380,28 @@ export function getAllTrackPaths(): Set<string> {
   }
   stmt.free();
   return paths;
+}
+
+export interface TrackIndex {
+  [path: string]: {
+    lastModified: number;
+    size: number;
+  };
+}
+
+export function getTrackIndex(): TrackIndex {
+  if (!db) return {};
+  const stmt = db.prepare("SELECT path, lastModified, size FROM tracks");
+  const index: TrackIndex = {};
+  while (stmt.step()) {
+    const row = stmt.get();
+    const path = row[0] as string;
+    const lastModified = row[1] as number;
+    const size = row[2] as number;
+    index[path] = { lastModified, size };
+  }
+  stmt.free();
+  return index;
 }
 
 export function getArtistCount(): number {

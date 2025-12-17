@@ -10,107 +10,112 @@ import {
   deleteDB,
   getDirectoryHandle,
   saveDirectoryHandle,
-  clearDirectoryHandle,
-  getAllTrackPaths,
-  deleteTrackByPath,
+  getTrackIndex,
   getArtistCount,
 } from "../database";
+import {
+  loadSettings,
+  saveSettings,
+  AppSettings,
+  ScanMode,
+  ScanInterval,
+} from "../settings";
 import { addLog, exportLogsAsText } from "../logger";
-
-import { RawTrack } from "../database";
-
-interface Track extends RawTrack {}
 
 export default function Settings() {
   const [isApiSupported, setIsApiSupported] = useState(false);
-  const [restoreFile, setRestoreFile] = useState<File | null>(null);
-  const [isBackgroundScanning, setIsBackgroundScanning] = useState(false);
-  const [backgroundScanStatus, setBackgroundScanStatus] = useState("Inactive");
   const [artistCount, setArtistCount] = useState(0);
   const [logs, setLogs] = useState<string[]>([]);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
 
-  const backgroundWorkerRef = useRef<Worker | null>(null);
+  // New state for settings and scanning
+  const [settings, setSettings] = useState<AppSettings>({ scanMode: 'on-launch', scanIntervalHours: 6 });
+  const [scanStatus, setScanStatus] = useState("Idle");
+  const [scanStats, setScanStats] = useState({ total: 0, new: 0, modified: 0, unchanged: 0, processed: 0 });
+  const [isScanning, setIsScanning] = useState(false);
+  const scannerWorkerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
-    setIsApiSupported(
-      typeof window !== "undefined" && "showDirectoryPicker" in window
-    );
-    initDB().then(async () => {
+    setIsApiSupported(typeof window !== "undefined" && "showDirectoryPicker" in window);
+    const loadedSettings = loadSettings();
+    setSettings(loadedSettings);
+
+    initDB().then(() => {
       setArtistCount(getArtistCount());
-      const existingHandle = await getDirectoryHandle();
-      if (existingHandle) {
-        startBackgroundScan(existingHandle);
-      }
     });
 
-    // Setup for background scanner
-    backgroundWorkerRef.current = new Worker(
-      new URL("../backgroundScanner.worker.ts", import.meta.url)
+    // Setup for the new scanner worker
+    scannerWorkerRef.current = new Worker(
+      new URL("../scanner.worker.ts", import.meta.url)
     );
-    backgroundWorkerRef.current.onmessage = async (
-      event: MessageEvent<{ type: string; payload: any }>
-    ) => {
-      const { type, payload } = event.data;
+
+    scannerWorkerRef.current.onmessage = async (event: MessageEvent) => {
+      const { type, message, stats, tracks, processed, total } = event.data;
       switch (type) {
-        case "state":
-          setBackgroundScanStatus(payload);
-          setIsBackgroundScanning(payload === "scanning");
+        case 'status':
+          setScanStatus(message);
+          addLog(`Status: ${message}`);
+          setLogs(prev => [...prev, `Status: ${message}`]);
           break;
-        case "log":
-          addLog(payload);
-          setLogs((prevLogs) => [...prevLogs, payload]);
+        case 'scan-progress':
+          setScanStats(prev => ({ ...prev, ...stats }));
           break;
-        case "added":
-          console.time("Bulk inserting tracks");
-          const tracks = payload as Track[];
+        case 'parse-progress':
+          setScanStats(prev => ({ ...prev, processed: processed, total: total }));
+          break;
+        case 'tracks-added':
+          console.time("Bulk inserting tracks batch");
           bulkInsertTracks(tracks);
           await saveDbToIndexedDB();
-          console.timeEnd("Bulk inserting tracks");
+          console.timeEnd("Bulk inserting tracks batch");
           setArtistCount(getArtistCount());
           break;
-        case "deleted":
-          const deletedPaths = payload as string[];
-          for (const path of deletedPaths) {
-            deleteTrackByPath(path);
-          }
-          await saveDbToIndexedDB();
-          setArtistCount(getArtistCount());
+        case 'scan-complete':
+          setIsScanning(false);
+          setScanStatus("Scan complete.");
+          setScanStats(prev => ({ ...prev, ...stats }));
+          addLog(`Scan complete: ${JSON.stringify(stats)}`);
+          setLogs(prev => [...prev, `Scan complete: ${JSON.stringify(stats)}`]);
           break;
       }
     };
 
     return () => {
-      backgroundWorkerRef.current?.terminate();
+      scannerWorkerRef.current?.terminate();
     };
   }, []);
 
-  const startBackgroundScan = (directoryHandle: FileSystemDirectoryHandle) => {
-    const knownFilePaths = getAllTrackPaths();
-    backgroundWorkerRef.current?.postMessage({
-      type: "start",
-      directoryHandle,
-      knownFilePaths: Array.from(knownFilePaths),
-    });
+  const handleSettingsChange = (newSettings: Partial<AppSettings>) => {
+    const updatedSettings = { ...settings, ...newSettings };
+    setSettings(updatedSettings);
+    saveSettings(updatedSettings);
   };
 
-  const handleStartBackgroundScan = async () => {
+  const handleStartScan = async () => {
+    setIsScanning(true);
+    setScanStatus("Initializing scan...");
+    setScanStats({ total: 0, new: 0, modified: 0, unchanged: 0, processed: 0 });
     try {
-      const directoryHandle = await window.showDirectoryPicker();
-      await saveDirectoryHandle(directoryHandle);
-      startBackgroundScan(directoryHandle);
+      let directoryHandle = await getDirectoryHandle();
+      if (!directoryHandle) {
+        directoryHandle = await window.showDirectoryPicker();
+        await saveDirectoryHandle(directoryHandle);
+      }
+      const trackIndex = getTrackIndex();
+      scannerWorkerRef.current?.postMessage({
+        type: 'scan',
+        directoryHandle,
+        trackIndex,
+      });
     } catch (error) {
+      setIsScanning(false);
       if (error instanceof DOMException && error.name === "AbortError") {
-        alert("Directory selection was cancelled.");
+        setScanStatus("Directory selection cancelled.");
       } else {
-        alert(`An error occurred: ${error}`);
-        console.error("Error selecting directory:", error);
+        setScanStatus("An error occurred during scan initiation.");
+        console.error("Error starting scan:", error);
       }
     }
-  };
-
-  const handleStopBackgroundScan = async () => {
-    await clearDirectoryHandle();
-    backgroundWorkerRef.current?.postMessage({ type: "stop" });
   };
 
   const handleExportLogs = () => {
@@ -146,7 +151,7 @@ export default function Settings() {
         if (event.target?.result) {
           const data = new Uint8Array(event.target.result as ArrayBuffer);
           await restoreDB(data);
-          alert("Database restored successfully. The application will now reload.");
+          alert("Database restored. The application will reload.");
           window.location.reload();
         }
       };
@@ -159,26 +164,71 @@ export default function Settings() {
       <h1>Settings</h1>
       <p>Artists Scanned: {artistCount}</p>
       <hr />
-      <h2>Background Scanning</h2>
+      <h2>File Scanning</h2>
       {isApiSupported ? (
         <>
-          <button
-            onClick={handleStartBackgroundScan}
-            disabled={isBackgroundScanning}
-          >
-            Select Directory & Start Scanning
+          <button onClick={handleStartScan} disabled={isScanning}>
+            {isScanning ? 'Scanning...' : 'Manual Scan'}
           </button>
-          <button
-            onClick={handleStopBackgroundScan}
-            disabled={!isBackgroundScanning}
-          >
-            Stop Scanning
-          </button>
+          <div style={{ marginTop: '1rem' }}>
+            <h4>Scan Options</h4>
+            <div>
+              <input
+                type="radio"
+                id="manual"
+                name="scanMode"
+                value="manual"
+                checked={settings.scanMode === 'manual'}
+                onChange={() => handleSettingsChange({ scanMode: 'manual' })}
+              />
+              <label htmlFor="manual"> Manual scan only</label>
+            </div>
+            <div>
+              <input
+                type="radio"
+                id="on-launch"
+                name="scanMode"
+                value="on-launch"
+                checked={settings.scanMode === 'on-launch'}
+                onChange={() => handleSettingsChange({ scanMode: 'on-launch' })}
+              />
+              <label htmlFor="on-launch"> Scan on application launch</label>
+            </div>
+            <div>
+              <input
+                type="radio"
+                id="periodic"
+                name="scanMode"
+                value="periodic"
+                checked={settings.scanMode === 'periodic'}
+                onChange={() => handleSettingsChange({ scanMode: 'periodic' })}
+              />
+              <label htmlFor="periodic"> Scan periodically</label>
+              {settings.scanMode === 'periodic' && (
+                <select
+                  value={settings.scanIntervalHours}
+                  onChange={(e) => handleSettingsChange({ scanIntervalHours: parseInt(e.target.value, 10) as ScanInterval })}
+                  style={{ marginLeft: '10px' }}
+                >
+                  <option value={1}>Every 1 hour</option>
+                  <option value={6}>Every 6 hours</option>
+                  <option value={24}>Every 24 hours</option>
+                </select>
+              )}
+            </div>
+          </div>
+          <h4>Scan Status</h4>
+          <p>{scanStatus}</p>
+          {isScanning && (
+            <div>
+              <p>Total Files: {scanStats.total} | New: {scanStats.new} | Modified: {scanStats.modified} | Unchanged: {scanStats.unchanged}</p>
+              <p>Metadata Parsing: {scanStats.processed} / {scanStats.total - scanStats.unchanged}</p>
+            </div>
+          )}
         </>
       ) : (
         <p>The File System Access API is not supported in your browser.</p>
       )}
-      <p>Status: {backgroundScanStatus}</p>
       <button onClick={handleExportLogs}>Export Logs</button>
       <div
         style={{
@@ -212,9 +262,7 @@ export default function Settings() {
             window.confirm("Are you sure you want to delete the database?")
           ) {
             await deleteDB();
-            alert(
-              "Database deleted successfully. The application will now reload."
-            );
+            alert("Database deleted. The application will reload.");
             window.location.reload();
           }
         }}
