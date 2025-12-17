@@ -245,6 +245,9 @@ export default function Settings() {
         ))}
       </div>
       <hr />
+      <h2>Testing</h2>
+      <Link href="/test">Metadata Speed Test</Link>
+      <hr />
       <h2>Database Management</h2>
       <button onClick={handleBackup}>Backup Database</button>
       <br />
