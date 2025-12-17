@@ -130,7 +130,7 @@ export default function Settings() {
   };
 
   return (
-    <main style={{ paddingBottom: "5rem" }}>
+    <main style={{ paddingBottom: "8rem" }}>
       <h1>Settings</h1>
       <p>Artists Scanned: {artistCount}</p>
       <hr />
