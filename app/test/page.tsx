@@ -28,9 +28,9 @@ const TestPage = () => {
           const endTime = performance.now();
           setElapsedTime(endTime - startTime);
           setMetadata({
-            title: tag.tags.title,
-            artist: tag.tags.artist,
-            album: tag.tags.album,
+            title: tag.tags.title || '',
+            artist: tag.tags.artist || '',
+            album: tag.tags.album || '',
           });
         },
         onError: (error) => {
