@@ -20,7 +20,7 @@ async function scan() {
   self.postMessage({ type: "state", payload: "scanning" });
 
   const currentFilePaths = new Set<string>();
-  const newTracks = [];
+  const newTracks: RawTrack[] = [];
 
   async function scanDirectory(
     dirHandle: FileSystemDirectoryHandle,
