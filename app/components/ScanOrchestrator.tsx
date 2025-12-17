@@ -30,9 +30,9 @@ export default function ScanOrchestrator() {
 
     const scheduleNextScan = (intervalHours: number) => {
         if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
+            window.clearTimeout(scanTimeoutRef.current);
         }
-        scanTimeoutRef.current = setTimeout(() => {
+        scanTimeoutRef.current = window.setTimeout(() => {
             startScan();
             scheduleNextScan(intervalHours); // Reschedule for the next interval
         }, intervalHours * 60 * 60 * 1000);
@@ -51,7 +51,7 @@ export default function ScanOrchestrator() {
     return () => {
         scannerWorkerRef.current?.terminate();
         if (scanTimeoutRef.current) {
-            clearTimeout(scanTimeoutRef.current);
+            window.clearTimeout(scanTimeoutRef.current);
         }
     };
   }, []); // Empty dependency array ensures this runs only once on mount
