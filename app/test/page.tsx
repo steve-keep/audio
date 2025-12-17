@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styles from './TestPage.module.css';
 import jsmediatags from 'jsmediatags';
 import * as mm from 'music-metadata-browser';
 
-// NOTE: taglib-wasm was removed from this test due to a persistent
-// Next.js build issue. The library causes a "Module not found" error
-// related to its WASM assets that could not be resolved with custom
-// Webpack configuration.
+// Extend the Window interface to include the taglibWasm object
+declare global {
+  interface Window {
+    taglibWasm: any;
+  }
+}
 
 interface Result {
   library: string;
@@ -23,6 +25,27 @@ const TestPage = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [status, setStatus] = useState('');
+  const [isTaglibScriptLoaded, setIsTaglibScriptLoaded] = useState(false);
+
+  useEffect(() => {
+    // Check if the script is already loaded
+    if (window.taglibWasm) {
+      setIsTaglibScriptLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = '/audio/vendor/taglib-wasm/lib-via-script-tag.js';
+    script.async = true;
+    script.onload = () => setIsTaglibScriptLoaded(true);
+    script.onerror = () => console.error('Failed to load the taglib-wasm script.');
+    document.body.appendChild(script);
+
+    return () => {
+      // Clean up the script tag if the component unmounts
+      document.body.removeChild(script);
+    };
+  }, []);
 
   const handleDirectorySelection = async () => {
     try {
@@ -79,10 +102,38 @@ const TestPage = () => {
     }
     endTime = performance.now();
     setResults(prev => [...prev, { library: 'music-metadata-browser', filesProcessed: files.length, timeTaken: endTime - startTime }]);
+
+    // --- taglib-wasm ---
+    if (isTaglibScriptLoaded && window.taglibWasm) {
+      setStatus('Testing taglib-wasm...');
+      startTime = performance.now();
+      try {
+        const taglib = await window.taglibWasm.TagLib.initialize({
+          locateFile: (path: string) => (path.endsWith('.wasm') ? '/audio/vendor/taglib-wasm/taglib.wasm' : path),
+        });
+
+        for (const fileHandle of files) {
+          try {
+            const file = await fileHandle.getFile();
+            const arrayBuffer = await file.arrayBuffer();
+            const data = new Uint8Array(arrayBuffer);
+            const tfile = await taglib.open(data, file.name);
+            tfile.tag(); // Read the tag
+            tfile.delete(); // IMPORTANT: Clean up WASM memory
+          } catch (error) {
+            console.error(`taglib-wasm failed to process ${fileHandle.name}:`, error);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to initialize taglib-wasm:', error);
+      }
+      endTime = performance.now();
+      setResults(prev => [...prev, { library: 'taglib-wasm', filesProcessed: files.length, timeTaken: endTime - startTime }]);
+    }
   };
 
   const handleStart = async () => {
-    if (!directory) return;
+    if (!directory || !isTaglibScriptLoaded) return;
 
     setIsScanning(true);
     setResults([]);
@@ -105,10 +156,11 @@ const TestPage = () => {
         <button onClick={handleDirectorySelection} disabled={isScanning}>
            {directory ? `Selected: ${directory.name}` : 'Select Directory'}
         </button>
-        <button onClick={handleStart} disabled={!directory || isScanning}>
+        <button onClick={handleStart} disabled={!directory || isScanning || !isTaglibScriptLoaded}>
           {isScanning ? 'Scanning...' : 'Start Test'}
         </button>
       </div>
+       {!isTaglibScriptLoaded && <p>Loading metadata library...</p>}
 
       {status && <p>{status}</p>}
 
