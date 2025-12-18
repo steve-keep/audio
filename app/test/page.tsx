@@ -3,16 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import styles from './TestPage.module.css';
 import jsmediatags from 'jsmediatags';
-import * as mm from 'music-metadata';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
-
-// Extend the Window interface to include the taglibWasm object
-declare global {
-  interface Window {
-    taglibWasm: any;
-  }
-}
 
 interface Result {
   library: string;
@@ -29,10 +21,8 @@ const TestPage = () => {
   const [status, setStatus] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [tags, setTags] = useState<any[]>([]);
-  const [isTaglibScriptLoaded, setIsTaglibScriptLoaded] = useState(false);
   const [isFFmpegLoaded, setIsFFmpegLoaded] = useState(false);
   const ffmpegRef = useRef<FFmpeg | null>(null);
-  const taglibRef = useRef<any | null>(null);
   const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
 
   useEffect(() => {
@@ -48,31 +38,6 @@ const TestPage = () => {
       setIsFFmpegLoaded(true);
     }
     loadLibs();
-  }, []);
-
-  useEffect(() => {
-    const loadTaglib = async () => {
-      if (window.taglibWasm) {
-        const response = await fetch('/audio/vendor/taglib-wasm/taglib.wasm');
-        const wasmBinary = await response.arrayBuffer();
-        const taglib = await window.taglibWasm.TagLib.initialize({ wasmBinary });
-        taglibRef.current = taglib;
-        setIsTaglibScriptLoaded(true);
-      }
-    }
-
-    // Load taglib-wasm script
-    if (!window.taglibWasm) {
-      const script = document.createElement('script');
-      script.src = '/audio/vendor/taglib-wasm/lib-via-script-tag.js';
-      script.async = true;
-      script.onload = loadTaglib;
-      script.onerror = () => console.error('Failed to load the taglib-wasm script.');
-      document.body.appendChild(script);
-      return () => { document.body.removeChild(script); };
-    } else {
-      loadTaglib();
-    }
   }, []);
 
   const handleDirectorySelection = async () => {
@@ -132,42 +97,6 @@ const TestPage = () => {
             });
           });
           filesProcessed++;
-        }
-      } else if (library === 'music-metadata') {
-        for (const fileHandle of files) {
-            const file = await fileHandle.getFile();
-            const buffer = new Uint8Array(await file.arrayBuffer());
-            const metadata = await mm.parseBuffer(buffer, { mimeType: file.type, size: file.size });
-            newTags.push(metadata.common);
-            filesProcessed++;
-        }
-      } else if (library === 'taglib-wasm') {
-        if (isTaglibScriptLoaded && taglibRef.current) {
-          for (const fileHandle of files) {
-            try {
-              const file = await fileHandle.getFile();
-              const arrayBuffer = await file.arrayBuffer();
-              const data = new Uint8Array(arrayBuffer);
-              const tfile = await taglibRef.current.open(data, file.name);
-              const tags = tfile.tag();
-              newTags.push({
-                title: tags.title,
-                artist: tags.artist,
-                album: tags.album,
-                year: tags.year,
-                track: tags.track,
-                genre: tags.genre,
-              });
-              tfile.dispose(); // IMPORTANT: Clean up WASM memory
-              filesProcessed++;
-            } catch (error) {
-              const errorMessage = `taglib-wasm failed to process ${fileHandle.name}: ${error instanceof Error ? error.message : String(error)}`;
-              console.error(errorMessage);
-              newErrors.push(errorMessage);
-            }
-          }
-        } else {
-          throw new Error('taglib-wasm is not loaded.');
         }
       } else if (library === 'ffmpeg.wasm') {
         if (isFFmpegLoaded && ffmpegRef.current) {
@@ -235,8 +164,6 @@ const TestPage = () => {
         </button>
         <select value={selectedLibrary} onChange={(e) => setSelectedLibrary(e.target.value)}>
           <option value="jsmediatags">jsmediatags</option>
-          <option value="music-metadata">music-metadata</option>
-          <option value="taglib-wasm">taglib-wasm</option>
           <option value="ffmpeg.wasm">ffmpeg.wasm</option>
         </select>
         <button
@@ -244,14 +171,12 @@ const TestPage = () => {
           disabled={
             !directory ||
             isScanning ||
-            (selectedLibrary === 'taglib-wasm' && !isTaglibScriptLoaded) ||
             (selectedLibrary === 'ffmpeg.wasm' && !isFFmpegLoaded)
           }
         >
           {isScanning ? 'Scanning...' : 'Run Test'}
         </button>
       </div>
-       {!isTaglibScriptLoaded && <p>Loading metadata library...</p>}
 
       {status && <p>{status}</p>}
 
