@@ -133,11 +133,10 @@ const TestPage = () => {
           });
           filesProcessed++;
         }
-      } else if (library === 'music-metadata-browser') {
+      } else if (library === 'music-metadata') {
         for (const fileHandle of files) {
             const file = await fileHandle.getFile();
-            const buffer = Buffer.from(await file.arrayBuffer());
-            const metadata = await mm.parseBuffer(buffer);
+            const metadata = await mm.parseBlob(file);
             newTags.push(metadata.common);
             filesProcessed++;
         }
@@ -235,7 +234,7 @@ const TestPage = () => {
         </button>
         <select value={selectedLibrary} onChange={(e) => setSelectedLibrary(e.target.value)}>
           <option value="jsmediatags">jsmediatags</option>
-          <option value="music-metadata-browser">music-metadata-browser</option>
+          <option value="music-metadata">music-metadata</option>
           <option value="taglib-wasm">taglib-wasm</option>
           <option value="ffmpeg.wasm">ffmpeg.wasm</option>
         </select>
