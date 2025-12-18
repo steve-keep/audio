@@ -136,7 +136,8 @@ const TestPage = () => {
       } else if (library === 'music-metadata') {
         for (const fileHandle of files) {
             const file = await fileHandle.getFile();
-            const metadata = await mm.parseBlob(file);
+            const buffer = new Uint8Array(await file.arrayBuffer());
+            const metadata = await mm.parseBuffer(buffer, { mimeType: file.type, size: file.size });
             newTags.push(metadata.common);
             filesProcessed++;
         }
