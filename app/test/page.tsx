@@ -6,7 +6,6 @@ import jsmediatags from 'jsmediatags';
 import * as mm from 'music-metadata';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
-import { Libav } from '@ffmpeg/libav';
 
 // Extend the Window interface to include the taglibWasm object
 declare global {
@@ -33,19 +32,11 @@ const TestPage = () => {
   const [isTaglibScriptLoaded, setIsTaglibScriptLoaded] = useState(false);
   const [isFFmpegLoaded, setIsFFmpegLoaded] = useState(false);
   const ffmpegRef = useRef<FFmpeg | null>(null);
-  const [isLibavLoaded, setIsLibavLoaded] = useState(false);
-  const libavRef = useRef<Libav | null>(null);
   const taglibRef = useRef<any | null>(null);
   const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
 
   useEffect(() => {
     const loadLibs = async () => {
-      // Load Libav
-      const libav = new Libav();
-      await libav.load();
-      libavRef.current = libav;
-      setIsLibavLoaded(true);
-
       // Load FFmpeg
       const ffmpeg = new FFmpeg();
       const baseURL = '/audio/vendor/ffmpeg-core';
@@ -187,9 +178,10 @@ const TestPage = () => {
             const data = new Uint8Array(arrayBuffer);
             await ffmpeg.writeFile(file.name, data);
             await ffmpeg.exec(['-i', file.name, '-f', 'ffmetadata', 'metadata.txt']);
-            const metadataOutput = await ffmpeg.readFile('metadata.txt', 'utf8');
+            const metadataOutput = await ffmpeg.readFile('metadata.txt');
             const tags: { [key: string]: string } = {};
-            metadataOutput.split('\n').forEach(line => {
+            const decoder = new TextDecoder('utf-8');
+            decoder.decode(metadataOutput as Uint8Array).split('\n').forEach(line => {
               const [key, ...value] = line.split('=');
               if (key && value.length > 0) {
                 tags[key.trim()] = value.join('=').trim();
@@ -200,20 +192,6 @@ const TestPage = () => {
           }
         } else {
           throw new Error('ffmpeg.wasm is not loaded.');
-        }
-      } else if (library === 'libav.js') {
-        if (isLibavLoaded) {
-          const libav = libavRef.current;
-          for (const fileHandle of files) {
-            const file = await fileHandle.getFile();
-            const arrayBuffer = await file.arrayBuffer();
-            const data = new Uint8Array(arrayBuffer);
-            const mediaInfo = await libav.demux(file.name, data);
-            newTags.push(mediaInfo.metadata);
-            filesProcessed++;
-          }
-        } else {
-          throw new Error('libav.js is not loaded.');
         }
       }
     } catch (error) {
@@ -260,7 +238,6 @@ const TestPage = () => {
           <option value="music-metadata-browser">music-metadata-browser</option>
           <option value="taglib-wasm">taglib-wasm</option>
           <option value="ffmpeg.wasm">ffmpeg.wasm</option>
-          <option value="libav.js">libav.js</option>
         </select>
         <button
           onClick={handleRunTest}
@@ -268,8 +245,7 @@ const TestPage = () => {
             !directory ||
             isScanning ||
             (selectedLibrary === 'taglib-wasm' && !isTaglibScriptLoaded) ||
-            (selectedLibrary === 'ffmpeg.wasm' && !isFFmpegLoaded) ||
-            (selectedLibrary === 'libav.js' && !isLibavLoaded)
+            (selectedLibrary === 'ffmpeg.wasm' && !isFFmpegLoaded)
           }
         >
           {isScanning ? 'Scanning...' : 'Run Test'}
