@@ -5,6 +5,7 @@ import styles from './TestPage.module.css';
 import jsmediatags from 'jsmediatags';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL } from '@ffmpeg/util';
+import init, { TagController } from 'id3-wasm';
 
 interface Result {
   library: string;
@@ -23,6 +24,7 @@ const TestPage = () => {
   const [tags, setTags] = useState<any[]>([]);
   const [isFFmpegLoaded, setIsFFmpegLoaded] = useState(false);
   const ffmpegRef = useRef<FFmpeg | null>(null);
+  const [isId3WasmLoaded, setIsId3WasmLoaded] = useState(false);
   const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
 
   useEffect(() => {
@@ -36,6 +38,14 @@ const TestPage = () => {
       });
       ffmpegRef.current = ffmpeg;
       setIsFFmpegLoaded(true);
+
+      // Load id3-wasm
+      try {
+        await init();
+        setIsId3WasmLoaded(true);
+      } catch (e) {
+        console.error("Failed to initialize id3-wasm", e);
+      }
     }
     loadLibs();
   }, []);
@@ -122,6 +132,43 @@ const TestPage = () => {
         } else {
           throw new Error('ffmpeg.wasm is not loaded.');
         }
+      } else if (library === 'id3-wasm') {
+        if (isId3WasmLoaded) {
+          for (const fileHandle of files) {
+            if (!fileHandle.name.toLowerCase().endsWith('.mp3')) {
+              continue; // id3-wasm is for ID3 tags, common in MP3s.
+            }
+            const file = await fileHandle.getFile();
+            const arrayBuffer = await file.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            let tagController;
+            let metadata;
+            try {
+              tagController = TagController.from(uint8Array);
+              metadata = tagController.getMetadata();
+              // Copy data to a plain JS object before wasm memory is freed.
+              const plainTags = {
+                title: metadata.title,
+                artist: metadata.artist,
+                album: metadata.album,
+                year: metadata.year,
+                track: (metadata as any).track,
+                genre: (metadata as any).genre,
+              };
+              newTags.push(plainTags);
+            } catch (e) {
+              const errorMessage = e instanceof Error ? e.message : String(e);
+              newErrors.push(`${fileHandle.name}: ${errorMessage}`);
+            } finally {
+              if (metadata) metadata.free();
+              if (tagController) tagController.free();
+            }
+            filesProcessed++;
+          }
+        } else {
+          throw new Error('id3-wasm is not loaded.');
+        }
       }
     } catch (error) {
       setStatus(`Error during testing ${library}: ${error instanceof Error ? error.message : String(error)}`);
@@ -165,13 +212,15 @@ const TestPage = () => {
         <select value={selectedLibrary} onChange={(e) => setSelectedLibrary(e.target.value)}>
           <option value="jsmediatags">jsmediatags</option>
           <option value="ffmpeg.wasm">ffmpeg.wasm</option>
+          <option value="id3-wasm">id3-wasm</option>
         </select>
         <button
           onClick={handleRunTest}
           disabled={
             !directory ||
             isScanning ||
-            (selectedLibrary === 'ffmpeg.wasm' && !isFFmpegLoaded)
+            (selectedLibrary === 'ffmpeg.wasm' && !isFFmpegLoaded) ||
+            (selectedLibrary === 'id3-wasm' && !isId3WasmLoaded)
           }
         >
           {isScanning ? 'Scanning...' : 'Run Test'}
