@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { useScanProgress } from '../context/ScanProgressContext';
 import styles from './TestPage.module.css';
 import jsmediatags from 'jsmediatags';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
@@ -26,6 +27,7 @@ const TestPage = () => {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const [isId3WasmLoaded, setIsId3WasmLoaded] = useState(false);
   const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
+  const { setStatus: setScanStatus, setFound, setProcessed, reset: resetScanProgress } = useScanProgress();
 
   useEffect(() => {
     const loadLibs = async () => {
@@ -89,6 +91,9 @@ const TestPage = () => {
     const newErrors: string[] = [];
     const newTags: any[] = [];
 
+    setFound(files.length);
+    setProcessed(0);
+
     try {
       if (library === 'jsmediatags') {
         for (const fileHandle of files) {
@@ -103,6 +108,7 @@ const TestPage = () => {
             });
           });
           filesProcessed++;
+          setProcessed(filesProcessed);
         }
       } else if (library === 'ffmpeg.wasm') {
         if (isFFmpegLoaded && ffmpegRef.current) {
@@ -124,6 +130,7 @@ const TestPage = () => {
             });
             newTags.push(tags);
             filesProcessed++;
+            setProcessed(filesProcessed);
           }
         } else {
           throw new Error('ffmpeg.wasm is not loaded.');
@@ -161,6 +168,7 @@ const TestPage = () => {
               if (tagController) tagController.free();
             }
             filesProcessed++;
+            setProcessed(filesProcessed);
           }
         } else {
           throw new Error('id3-wasm is not loaded.');
@@ -189,6 +197,9 @@ const TestPage = () => {
     setStatus(`Testing ${library} in parallel...`);
     const startTime = performance.now();
 
+    setFound(files.length);
+    setProcessed(0);
+
     const numWorkers = navigator.hardwareConcurrency || 2;
     const workers: Worker[] = [];
     const filesPerWorker = Math.ceil(files.length / numWorkers);
@@ -210,6 +221,7 @@ const TestPage = () => {
             if (event.data.error) {
               reject(new Error(event.data.error));
             } else {
+              setProcessed(currentCount => currentCount + event.data.results.length);
               resolve(event.data);
             }
             worker.terminate();
@@ -252,19 +264,29 @@ const TestPage = () => {
     if (!directory) return;
 
     setIsScanning(true);
+    resetScanProgress();
+    setScanStatus('running');
     setStatus('Scanning directory for audio files...');
 
-    const audioFiles = await getAllFiles(directory);
-    setStatus(`Found ${audioFiles.length} audio files. Now running test...`);
+    try {
+      const audioFiles = await getAllFiles(directory);
+      setStatus(`Found ${audioFiles.length} audio files. Now running test...`);
+      setFound(audioFiles.length);
 
-    if (selectedLibrary.endsWith('-parallel')) {
-      await runPerformanceTestParallel(audioFiles, selectedLibrary.replace('-parallel', ''));
-    } else {
-      await runPerformanceTest(audioFiles, selectedLibrary);
+      if (selectedLibrary.endsWith('-parallel')) {
+        await runPerformanceTestParallel(audioFiles, selectedLibrary.replace('-parallel', ''));
+      } else {
+        await runPerformanceTest(audioFiles, selectedLibrary);
+      }
+      setScanStatus('success');
+      setStatus(`Testing complete. Processed ${audioFiles.length} files with ${selectedLibrary}.`);
+    } catch (error) {
+      setScanStatus('error');
+      setStatus(`An error occurred during the test.`);
+      console.error(error);
+    } finally {
+      setIsScanning(false);
     }
-
-    setIsScanning(false);
-    setStatus(`Testing complete. Processed ${audioFiles.length} files with ${selectedLibrary}.`);
   };
 
 

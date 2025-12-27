@@ -1,0 +1,28 @@
+.scan-progress-pill {
+  position: fixed;
+  bottom: 80px; /* Above the NavBar */
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 1000;
+  transition: opacity 0.5s ease-in-out;
+  opacity: 1;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.scan-progress-pill.success {
+  background-color: #28a745;
+}
+
+.scan-progress-pill.error {
+  background-color: #dc3545;
+}
+
+.scan-progress-pill.fade-out {
+  opacity: 0;
+}
