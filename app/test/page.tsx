@@ -31,11 +31,7 @@ const TestPage = () => {
     const loadLibs = async () => {
       // Load FFmpeg
       const ffmpeg = new FFmpeg();
-      const baseURL = '/audio/vendor/ffmpeg-core';
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      });
+      await ffmpeg.load();
       ffmpegRef.current = ffmpeg;
       setIsFFmpegLoaded(true);
 
@@ -186,6 +182,72 @@ const TestPage = () => {
     setTags(newTags);
   };
 
+  const runPerformanceTestParallel = async (files: FileSystemFileHandle[], library: string) => {
+    setResults([]);
+    setErrors([]);
+    setTags([]);
+    setStatus(`Testing ${library} in parallel...`);
+    const startTime = performance.now();
+
+    const numWorkers = navigator.hardwareConcurrency || 2;
+    const workers: Worker[] = [];
+    const filesPerWorker = Math.ceil(files.length / numWorkers);
+    const promises: Promise<{ results: any[], errors: string[] }>[] = [];
+
+    for (let i = 0; i < numWorkers; i++) {
+      const worker = new Worker(new URL('../workers/metadata-worker.ts', import.meta.url), {
+        type: 'module',
+      });
+      workers.push(worker);
+
+      const start = i * filesPerWorker;
+      const end = start + filesPerWorker;
+      const chunk = files.slice(start, end);
+
+      if (chunk.length > 0) {
+        const promise = new Promise<{ results: any[], errors: string[] }>((resolve, reject) => {
+          worker.onmessage = (event) => {
+            if (event.data.error) {
+              reject(new Error(event.data.error));
+            } else {
+              resolve(event.data);
+            }
+            worker.terminate();
+          };
+          worker.onerror = (error) => {
+            reject(error);
+            worker.terminate();
+          };
+
+          // For FileSystemFileHandle, we need to get the File object first
+          Promise.all(chunk.map(handle => handle.getFile())).then(fileObjects => {
+            // Pass the array of File objects to the worker
+            worker.postMessage({ files: fileObjects, library });
+          });
+        });
+        promises.push(promise);
+      }
+    }
+
+    try {
+      const allResults = await Promise.all(promises);
+      const combinedResults = allResults.flatMap(r => r.results);
+      const combinedErrors = allResults.flatMap(r => r.errors);
+
+      const endTime = performance.now();
+      setResults([{ library: `${library} (Parallel)`, filesProcessed: combinedResults.length, timeTaken: endTime - startTime }]);
+      setErrors(combinedErrors);
+      setTags(combinedResults);
+
+    } catch (error) {
+      const endTime = performance.now();
+      setStatus(`Error during parallel testing: ${error instanceof Error ? error.message : String(error)}`);
+      setResults([{ library: `${library} (Parallel)`, filesProcessed: 0, timeTaken: endTime - startTime }]);
+    } finally {
+      workers.forEach(worker => worker.terminate());
+    }
+  };
+
   const handleRunTest = async () => {
     if (!directory) return;
 
@@ -195,7 +257,11 @@ const TestPage = () => {
     const audioFiles = await getAllFiles(directory);
     setStatus(`Found ${audioFiles.length} audio files. Now running test...`);
 
-    await runPerformanceTest(audioFiles, selectedLibrary);
+    if (selectedLibrary.endsWith('-parallel')) {
+      await runPerformanceTestParallel(audioFiles, selectedLibrary.replace('-parallel', ''));
+    } else {
+      await runPerformanceTest(audioFiles, selectedLibrary);
+    }
 
     setIsScanning(false);
     setStatus(`Testing complete. Processed ${audioFiles.length} files with ${selectedLibrary}.`);
@@ -213,6 +279,9 @@ const TestPage = () => {
           <option value="jsmediatags">jsmediatags</option>
           <option value="ffmpeg.wasm">ffmpeg.wasm</option>
           <option value="id3-wasm">id3-wasm</option>
+          <option value="jsmediatags-parallel">jsmediatags (Parallel)</option>
+          <option value="ffmpeg.wasm-parallel">ffmpeg.wasm (Parallel)</option>
+          <option value="id3-wasm-parallel">id3-wasm (Parallel)</option>
         </select>
         <button
           onClick={handleRunTest}
