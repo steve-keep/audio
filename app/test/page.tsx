@@ -31,11 +31,7 @@ const TestPage = () => {
     const loadLibs = async () => {
       // Load FFmpeg
       const ffmpeg = new FFmpeg();
-      const baseURL = '/audio/vendor/ffmpeg-core';
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      });
+      await ffmpeg.load();
       ffmpegRef.current = ffmpeg;
       setIsFFmpegLoaded(true);
 
@@ -199,7 +195,9 @@ const TestPage = () => {
     const promises: Promise<{ results: any[], errors: string[] }>[] = [];
 
     for (let i = 0; i < numWorkers; i++) {
-      const worker = new Worker('/workers/metadata-worker.js');
+      const worker = new Worker(new URL('../workers/metadata-worker.ts', import.meta.url), {
+        type: 'module',
+      });
       workers.push(worker);
 
       const start = i * filesPerWorker;
