@@ -63,200 +63,221 @@ const TestPage = () => {
     }
   };
 
-  const getAllFiles = async (dirHandle: FileSystemDirectoryHandle): Promise<FileSystemFileHandle[]> => {
-    const files: FileSystemFileHandle[] = [];
-    const processDirectory = async (currentDirHandle: FileSystemDirectoryHandle) => {
-      for await (const entry of currentDirHandle.values()) {
+  const processFilesInBatches = async function* (
+    dirHandle: FileSystemDirectoryHandle,
+    batchSize: number
+  ): AsyncGenerator<FileSystemFileHandle[]> {
+    let fileBatch: FileSystemFileHandle[] = [];
+    let totalFound = 0;
+
+    // Corrected recursive batching logic
+    const subdirectoryStack: FileSystemDirectoryHandle[] = [dirHandle];
+    while (subdirectoryStack.length > 0) {
+      const currentDir = subdirectoryStack.pop()!;
+      for await (const entry of currentDir.values()) {
         if (entry.kind === 'file') {
           const isSupported = SUPPORTED_EXTENSIONS.some(ext => entry.name.toLowerCase().endsWith(ext));
           if (isSupported) {
-            files.push(entry);
+            fileBatch.push(entry);
+            totalFound++;
+            setFound(totalFound);
+            if (fileBatch.length >= batchSize) {
+              yield fileBatch;
+              fileBatch = [];
+            }
           }
         } else if (entry.kind === 'directory') {
-          await processDirectory(entry);
+          subdirectoryStack.push(entry);
         }
       }
-    };
-    await processDirectory(dirHandle);
-    return files;
+    }
+
+
+    if (fileBatch.length > 0) {
+      yield fileBatch;
+    }
   };
 
-  const runPerformanceTest = async (files: FileSystemFileHandle[], library: string) => {
+  const runPerformanceTest = async (library: string) => {
+    if (!directory) return;
+
     setResults([]);
     setErrors([]);
     setTags([]);
     setStatus(`Testing ${library}...`);
     const startTime = performance.now();
-    let filesProcessed = 0;
+    let totalFilesProcessed = 0;
     const newErrors: string[] = [];
-    const newTags: any[] = [];
+    const allTags: any[] = [];
 
-    setFound(files.length);
     setProcessed(0);
 
     try {
-      if (library === 'jsmediatags') {
-        for (const fileHandle of files) {
-          const file = await fileHandle.getFile();
-          await new Promise<void>((resolve, reject) => {
-            jsmediatags.read(file, {
-              onSuccess: (tag) => {
-                newTags.push(tag.tags);
-                resolve();
-              },
-              onError: (e) => reject(e),
-            });
-          });
-          filesProcessed++;
-          setProcessed(filesProcessed);
-        }
-      } else if (library === 'ffmpeg.wasm') {
-        if (isFFmpegLoaded && ffmpegRef.current) {
-          const ffmpeg = ffmpegRef.current;
-          for (const fileHandle of files) {
+      const batchSize = 20; // Process 20 files at a time for the sequential test
+      for await (const batch of processFilesInBatches(directory, batchSize)) {
+        const batchTags: any[] = [];
+        const batchErrors: string[] = [];
+
+        if (library === 'jsmediatags') {
+          await Promise.all(batch.map(async (fileHandle) => {
             const file = await fileHandle.getFile();
-            const arrayBuffer = await file.arrayBuffer();
-            const data = new Uint8Array(arrayBuffer);
-            await ffmpeg.writeFile(file.name, data);
-            await ffmpeg.exec(['-i', file.name, '-f', 'ffmetadata', 'metadata.txt']);
-            const metadataOutput = await ffmpeg.readFile('metadata.txt');
-            const tags: { [key: string]: string } = {};
-            const decoder = new TextDecoder('utf-8');
-            decoder.decode(metadataOutput as Uint8Array).split('\n').forEach(line => {
-              const [key, ...value] = line.split('=');
-              if (key && value.length > 0) {
-                tags[key.trim()] = value.join('=').trim();
-              }
+            return new Promise<void>((resolve) => {
+              jsmediatags.read(file, {
+                onSuccess: (tag) => {
+                  batchTags.push(tag.tags);
+                  resolve();
+                },
+                onError: (e) => {
+                  batchErrors.push(`${fileHandle.name}: ${e.type} - ${e.info}`);
+                  resolve(); // Don't reject, just record the error and continue
+                },
+              });
             });
-            newTags.push(tags);
-            filesProcessed++;
-            setProcessed(filesProcessed);
-          }
-        } else {
-          throw new Error('ffmpeg.wasm is not loaded.');
-        }
-      } else if (library === 'id3-wasm') {
-        if (isId3WasmLoaded) {
-          for (const fileHandle of files) {
-            if (!fileHandle.name.toLowerCase().endsWith('.mp3')) {
-              continue; // id3-wasm is for ID3 tags, common in MP3s.
+          }));
+        } else if (library === 'ffmpeg.wasm') {
+          if (!isFFmpegLoaded || !ffmpegRef.current) throw new Error('ffmpeg.wasm is not loaded.');
+          const ffmpeg = ffmpegRef.current;
+          for (const fileHandle of batch) {
+            try {
+              const file = await fileHandle.getFile();
+              const arrayBuffer = await file.arrayBuffer();
+              const data = new Uint8Array(arrayBuffer);
+              await ffmpeg.writeFile(file.name, data);
+              await ffmpeg.exec(['-i', file.name, '-f', 'ffmetadata', 'metadata.txt']);
+              const metadataOutput = await ffmpeg.readFile('metadata.txt');
+              const tags: { [key: string]: string } = {};
+              const decoder = new TextDecoder('utf-8');
+              decoder.decode(metadataOutput as Uint8Array).split('\n').forEach(line => {
+                const [key, ...value] = line.split('=');
+                if (key && value.length > 0) tags[key.trim()] = value.join('=').trim();
+              });
+              batchTags.push(tags);
+            } catch (e) {
+               const errorMessage = e instanceof Error ? e.message : String(e);
+               batchErrors.push(`${fileHandle.name}: ${errorMessage}`);
             }
+          }
+        } else if (library === 'id3-wasm') {
+          if (!isId3WasmLoaded) throw new Error('id3-wasm is not loaded.');
+          for (const fileHandle of batch) {
+            if (!fileHandle.name.toLowerCase().endsWith('.mp3')) continue;
             const file = await fileHandle.getFile();
             const arrayBuffer = await file.arrayBuffer();
             const uint8Array = new Uint8Array(arrayBuffer);
-
             let tagController;
             let metadata;
             try {
               tagController = TagController.from(uint8Array);
               metadata = tagController.getMetadata();
-              // Copy data to a plain JS object before wasm memory is freed.
-              const plainTags = {
-                title: metadata.title,
-                artist: metadata.artist,
-                album: metadata.album,
-                year: metadata.year,
-                track: (metadata as any).track,
-                genre: (metadata as any).genre,
-              };
-              newTags.push(plainTags);
+              batchTags.push({
+                title: metadata.title, artist: metadata.artist, album: metadata.album,
+                year: metadata.year, track: (metadata as any).track, genre: (metadata as any).genre,
+              });
             } catch (e) {
               const errorMessage = e instanceof Error ? e.message : String(e);
-              newErrors.push(`${fileHandle.name}: ${errorMessage}`);
+              batchErrors.push(`${fileHandle.name}: ${errorMessage}`);
             } finally {
               if (metadata) metadata.free();
               if (tagController) tagController.free();
             }
-            filesProcessed++;
-            setProcessed(filesProcessed);
           }
-        } else {
-          throw new Error('id3-wasm is not loaded.');
         }
+
+        totalFilesProcessed += batch.length;
+        setProcessed(totalFilesProcessed);
+        allTags.push(...batchTags);
+        setTags(currentTags => [...currentTags, ...batchTags]);
+        newErrors.push(...batchErrors);
+        setErrors(currentErrors => [...currentErrors, ...batchErrors]);
+
+        const intermediateTime = performance.now();
+        setResults([{ library, filesProcessed: totalFilesProcessed, timeTaken: intermediateTime - startTime }]);
+        setStatus(`Processing... Found: ${totalFilesProcessed}, Processed: ${totalFilesProcessed}`);
       }
     } catch (error) {
-      setStatus(`Error during testing ${library}: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setStatus(`Error during testing ${library}: ${errorMessage}`);
       console.error(error);
-      // Stop the timer and update results even if there was an error
       const endTime = performance.now();
-      setResults([{ library, filesProcessed, timeTaken: endTime - startTime }]);
+      setResults(prev => [{ library: prev[0]?.library || library, filesProcessed: totalFilesProcessed, timeTaken: endTime - startTime }]);
       setErrors(newErrors);
-      return; // Exit the function
+      return;
     }
 
     const endTime = performance.now();
-    setResults([{ library, filesProcessed, timeTaken: endTime - startTime }]);
-    setErrors(newErrors);
-    setTags(newTags);
+    setResults([{ library, filesProcessed: totalFilesProcessed, timeTaken: endTime - startTime }]);
   };
 
-  const runPerformanceTestParallel = async (files: FileSystemFileHandle[], library: string) => {
+  const runPerformanceTestParallel = async (library: string) => {
+    if (!directory) return;
+
     setResults([]);
     setErrors([]);
     setTags([]);
     setStatus(`Testing ${library} in parallel...`);
     const startTime = performance.now();
+    let totalFilesProcessed = 0;
 
-    setFound(files.length);
     setProcessed(0);
 
-    const numWorkers = navigator.hardwareConcurrency || 2;
-    const workers: Worker[] = [];
-    const filesPerWorker = Math.ceil(files.length / numWorkers);
-    const promises: Promise<{ results: any[], errors: string[] }>[] = [];
-
-    for (let i = 0; i < numWorkers; i++) {
-      const worker = new Worker(new URL('../workers/metadata-worker.ts', import.meta.url), {
-        type: 'module',
-      });
-      workers.push(worker);
-
-      const start = i * filesPerWorker;
-      const end = start + filesPerWorker;
-      const chunk = files.slice(start, end);
-
-      if (chunk.length > 0) {
-        const promise = new Promise<{ results: any[], errors: string[] }>((resolve, reject) => {
-          worker.onmessage = (event) => {
-            if (event.data.error) {
-              reject(new Error(event.data.error));
-            } else {
-              setProcessed((currentCount: number) => currentCount + event.data.results.length);
-              resolve(event.data);
-            }
-            worker.terminate();
-          };
-          worker.onerror = (error) => {
-            reject(error);
-            worker.terminate();
-          };
-
-          // For FileSystemFileHandle, we need to get the File object first
-          Promise.all(chunk.map(handle => handle.getFile())).then(fileObjects => {
-            // Pass the array of File objects to the worker
-            worker.postMessage({ files: fileObjects, library });
-          });
-        });
-        promises.push(promise);
-      }
-    }
+    const numWorkers = navigator.hardwareConcurrency || 4;
+    const batchSize = numWorkers * 10; // Give each worker 10 files per batch
 
     try {
-      const allResults = await Promise.all(promises);
-      const combinedResults = allResults.flatMap(r => r.results);
-      const combinedErrors = allResults.flatMap(r => r.errors);
+      for await (const batch of processFilesInBatches(directory, batchSize)) {
+        const workers: Worker[] = [];
+        const promises: Promise<{ results: any[], errors: string[] }>[] = [];
+        const filesPerWorker = Math.ceil(batch.length / numWorkers);
 
+        for (let i = 0; i < numWorkers; i++) {
+          const worker = new Worker(new URL('../workers/metadata-worker.ts', import.meta.url), { type: 'module' });
+          workers.push(worker);
+
+          const start = i * filesPerWorker;
+          const end = start + filesPerWorker;
+          const chunk = batch.slice(start, end);
+
+          if (chunk.length > 0) {
+            const promise = new Promise<{ results: any[], errors: string[] }>((resolve, reject) => {
+              worker.onmessage = (event) => {
+                if (event.data.error) reject(new Error(event.data.error));
+                else resolve(event.data);
+                worker.terminate();
+              };
+              worker.onerror = (error) => {
+                reject(error);
+                worker.terminate();
+              };
+              Promise.all(chunk.map(handle => handle.getFile())).then(fileObjects => {
+                worker.postMessage({ files: fileObjects, library });
+              });
+            });
+            promises.push(promise);
+          }
+        }
+
+        const allResults = await Promise.all(promises);
+        const allResults = await Promise.all(promises);
+        const combinedResults = allResults.flatMap(r => r.results);
+        const combinedErrors = allResults.flatMap(r => r.errors);
+
+        const successfullyProcessedInBatch = combinedResults.length;
+        totalFilesProcessed += successfullyProcessedInBatch;
+        setProcessed(currentCount => currentCount + successfullyProcessedInBatch);
+        setTags(currentTags => [...currentTags, ...combinedResults]);
+        setErrors(currentErrors => [...currentErrors, ...combinedErrors]);
+
+        const intermediateTime = performance.now();
+        setResults([{ library: `${library} (Parallel)`, filesProcessed: totalFilesProcessed, timeTaken: intermediateTime - startTime }]);
+        setStatus(`Processing... Processed: ${totalFilesProcessed}`);
+      }
       const endTime = performance.now();
-      setResults([{ library: `${library} (Parallel)`, filesProcessed: combinedResults.length, timeTaken: endTime - startTime }]);
-      setErrors(combinedErrors);
-      setTags(combinedResults);
-
+      setResults([{ library: `${library} (Parallel)`, filesProcessed: totalFilesProcessed, timeTaken: endTime - startTime }]);
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setStatus(`Error during parallel testing: ${errorMessage}`);
       const endTime = performance.now();
-      setStatus(`Error during parallel testing: ${error instanceof Error ? error.message : String(error)}`);
-      setResults([{ library: `${library} (Parallel)`, filesProcessed: 0, timeTaken: endTime - startTime }]);
-    } finally {
-      workers.forEach(worker => worker.terminate());
+      setResults([{ library: `${library} (Parallel)`, filesProcessed: totalFilesProcessed, timeTaken: endTime - startTime }]);
     }
   };
 
@@ -265,24 +286,27 @@ const TestPage = () => {
 
     setIsScanning(true);
     resetScanProgress();
+    setFound(0);
+    setProcessed(0);
     setScanStatus('running');
-    setStatus('Scanning directory for audio files...');
+    setStatus('Starting test...');
 
     try {
-      const audioFiles = await getAllFiles(directory);
-      setStatus(`Found ${audioFiles.length} audio files. Now running test...`);
-      setFound(audioFiles.length);
+      const library = selectedLibrary.replace('-parallel', '');
+      const isParallel = selectedLibrary.endsWith('-parallel');
 
-      if (selectedLibrary.endsWith('-parallel')) {
-        await runPerformanceTestParallel(audioFiles, selectedLibrary.replace('-parallel', ''));
+      if (isParallel) {
+        await runPerformanceTestParallel(library);
       } else {
-        await runPerformanceTest(audioFiles, selectedLibrary);
+        await runPerformanceTest(library);
       }
+
       setScanStatus('success');
-      setStatus(`Testing complete. Processed ${audioFiles.length} files with ${selectedLibrary}.`);
+      setStatus(`Testing complete for ${selectedLibrary}.`);
     } catch (error) {
       setScanStatus('error');
-      setStatus(`An error occurred during the test.`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setStatus(`An error occurred during the test: ${errorMessage}`);
       console.error(error);
     } finally {
       setIsScanning(false);
