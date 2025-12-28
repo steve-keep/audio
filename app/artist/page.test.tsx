@@ -23,20 +23,21 @@ vi.mock('../components/ArtistHeader', () => ({
   ),
 }));
 
-vi.mock('../components/AlbumTabs', () => ({
-    default: ({ allAlbums, libraryAlbums }: { allAlbums: React.ReactNode; libraryAlbums: React.ReactNode }) => {
+vi.mock('../components/AlbumTabs', () => {
+  const AlbumTabsMock = ({ allAlbums, libraryAlbums }: { allAlbums: React.ReactNode; libraryAlbums: React.ReactNode }) => {
     const [activeTab, setActiveTab] = useState('all');
     return (
       <div data-testid="album-tabs">
         <button onClick={() => setActiveTab('all')}>All Albums</button>
         <button onClick={() => setActiveTab('library')}>In Library</button>
         <div data-testid="tab-content">
-            {activeTab === 'all' ? allAlbums : libraryAlbums}
+          {activeTab === 'all' ? allAlbums : libraryAlbums}
         </div>
       </div>
     );
-  },
-}));
+  };
+  return { default: AlbumTabsMock };
+});
 
 vi.mock('../components/AlbumList', () => ({
   default: ({ albums }: { albums: database.Album[] }) => (

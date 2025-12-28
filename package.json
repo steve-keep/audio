@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "npx serve@latest out -p 3001",
-    "lint": "eslint",
+    "lint": "next lint",
     "test": "vitest",
     "test:ci": "vitest run --coverage"
   },

@@ -10,7 +10,7 @@ interface ScanProgressState {
   processed: number;
   setStatus: (status: ScanStatus) => void;
   setFound: (count: number) => void;
-  setProcessed: (count: number) => void;
+  setProcessed: React.Dispatch<React.SetStateAction<number>>;
   reset: () => void;
 }
 
