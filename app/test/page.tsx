@@ -257,7 +257,6 @@ const TestPage = () => {
         }
 
         const allResults = await Promise.all(promises);
-        const allResults = await Promise.all(promises);
         const combinedResults = allResults.flatMap(r => r.results);
         const combinedErrors = allResults.flatMap(r => r.errors);
 
