@@ -27,6 +27,7 @@ const TestPage = () => {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const [isId3WasmLoaded, setIsId3WasmLoaded] = useState(false);
   const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
+  const [batchSize, setBatchSize] = useState(5);
   const { setStatus: setScanStatus, setFound, setProcessed, reset: resetScanProgress } = useScanProgress();
 
   useEffect(() => {
@@ -205,7 +206,7 @@ const TestPage = () => {
 
       totalFilesProcessed += batch.length;
       setProcessed(totalFilesProcessed);
-      setTags(currentTags => [...currentTags, ...batchTags]);
+      setTags(currentTags => [...batchTags, ...currentTags]);
       setErrors(currentErrors => [...currentErrors, ...batchErrors]);
 
       const intermediateTime = performance.now();
@@ -214,7 +215,6 @@ const TestPage = () => {
     };
 
     try {
-      const batchSize = 20; // Process 20 files at a time for the sequential test
       await traverseAndProcess(directory, batchSize, processBatch, false);
 
       const endTime = performance.now();
@@ -276,7 +276,7 @@ const TestPage = () => {
       const successfullyProcessedInBatch = combinedResults.length;
 
       setProcessed(currentCount => currentCount + successfullyProcessedInBatch);
-      setTags(currentTags => [...currentTags, ...combinedResults]);
+      setTags(currentTags => [...combinedResults, ...currentTags]);
       setErrors(currentErrors => [...currentErrors, ...combinedErrors]);
 
       const intermediateTime = performance.now();
@@ -295,8 +295,6 @@ const TestPage = () => {
     };
 
     try {
-      const numWorkers = navigator.hardwareConcurrency || 4;
-      const batchSize = numWorkers * 10;
       await traverseAndProcess(directory, batchSize, processBatch, false);
 
       const endTime = performance.now();
@@ -364,6 +362,21 @@ const TestPage = () => {
           <option value="ffmpeg.wasm-parallel">ffmpeg.wasm (Parallel)</option>
           <option value="id3-wasm-parallel">id3-wasm (Parallel)</option>
         </select>
+        <div className={styles.inputGroup}>
+          <label htmlFor="batchSize">Batch Size:</label>
+          <input
+            type="number"
+            id="batchSize"
+            value={batchSize}
+            onChange={(e) => {
+              const val = e.target.value === '' ? 1 : parseInt(e.target.value, 10);
+              setBatchSize(Math.max(1, Math.min(100, val)));
+            }}
+            min="1"
+            max="100"
+            disabled={isScanning}
+          />
+        </div>
         <button
           onClick={handleRunTest}
           disabled={

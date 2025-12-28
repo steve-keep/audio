@@ -9,6 +9,12 @@
   margin-bottom: 2rem;
 }
 
+.inputGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .results {
   margin-top: 2rem;
 }
