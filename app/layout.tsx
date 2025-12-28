@@ -3,6 +3,8 @@ import { Inter, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import NavBar from "./components/NavBar";
 import AppInitializer from "./components/AppInitializer";
+import { ScanProgressProvider } from "./context/ScanProgressContext";
+import ScanProgressPill from "./components/ScanProgressPill";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -48,10 +50,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${robotoMono.variable}`}>
-        <AppInitializer>
-            {children}
-        </AppInitializer>
-        <NavBar />
+        <ScanProgressProvider>
+          <AppInitializer>
+              {children}
+          </AppInitializer>
+          <ScanProgressPill />
+          <NavBar />
+        </ScanProgressProvider>
       </body>
     </html>
   );
