@@ -221,7 +221,7 @@ const TestPage = () => {
             if (event.data.error) {
               reject(new Error(event.data.error));
             } else {
-              setProcessed(currentCount => currentCount + event.data.results.length);
+              setProcessed((currentCount: number) => currentCount + event.data.results.length);
               resolve(event.data);
             }
             worker.terminate();
