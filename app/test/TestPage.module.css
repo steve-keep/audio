@@ -40,3 +40,8 @@
   margin-top: 1rem;
   color: #ff5555;
 }
+
+.stopButton {
+  background-color: #f44336;
+  color: white;
+}

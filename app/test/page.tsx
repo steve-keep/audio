@@ -29,6 +29,7 @@ const TestPage = () => {
   const [selectedLibrary, setSelectedLibrary] = useState('jsmediatags');
   const [batchSize, setBatchSize] = useState(5);
   const { setStatus: setScanStatus, setFound, setProcessed, reset: resetScanProgress } = useScanProgress();
+  const scanCancelledRef = useRef(false);
 
   useEffect(() => {
     const loadLibs = async () => {
@@ -64,64 +65,34 @@ const TestPage = () => {
     }
   };
 
-  const traverseAndProcess = async (
-    dirHandle: FileSystemDirectoryHandle,
-    batchSize: number,
-    processBatch: (batch: FileSystemFileHandle[]) => Promise<any>,
-    isParallel: boolean
-  ) => {
-    let fileBatch: FileSystemFileHandle[] = [];
+  async function* findFilesRecursively(directoryHandle: FileSystemDirectoryHandle): AsyncGenerator<FileSystemFileHandle> {
+    const subdirectoryStack: FileSystemDirectoryHandle[] = [directoryHandle];
     let totalFound = 0;
-    const promises: Promise<any>[] = [];
     let entriesProcessed = 0;
 
-    const subdirectoryStack: FileSystemDirectoryHandle[] = [dirHandle];
     while (subdirectoryStack.length > 0) {
+      if (scanCancelledRef.current) return;
       const currentDir = subdirectoryStack.pop()!;
       for await (const entry of currentDir.values()) {
+        if (scanCancelledRef.current) return;
         entriesProcessed++;
         if (entriesProcessed % 100 === 0) {
-          // Yield to the event loop to keep the UI responsive
           await new Promise(r => setTimeout(r, 0));
         }
 
         if (entry.kind === 'file') {
           const isSupported = SUPPORTED_EXTENSIONS.some(ext => entry.name.toLowerCase().endsWith(ext));
           if (isSupported) {
-            fileBatch.push(entry);
             totalFound++;
             setFound(totalFound);
-            if (fileBatch.length >= batchSize) {
-              const promise = processBatch(fileBatch);
-              if (isParallel) {
-                promises.push(promise);
-                // Yield to event loop to allow processing to start before we find more files
-                await new Promise(r => setTimeout(r, 0));
-              } else {
-                await promise;
-              }
-              fileBatch = [];
-            }
+            yield entry;
           }
         } else if (entry.kind === 'directory') {
           subdirectoryStack.push(entry);
         }
       }
     }
-
-    if (fileBatch.length > 0) {
-      const promise = processBatch(fileBatch);
-      if (isParallel) {
-        promises.push(promise);
-      } else {
-        await promise;
-      }
-    }
-
-    if (isParallel) {
-      await Promise.all(promises);
-    }
-  };
+  }
 
   const runPerformanceTest = async (library: string) => {
     if (!directory) return;
@@ -132,99 +103,99 @@ const TestPage = () => {
     setStatus(`Testing ${library}...`);
     const startTime = performance.now();
     let totalFilesProcessed = 0;
+    let totalFilesFound = 0;
+    const localTags: any[] = [];
+    const localErrors: string[] = [];
 
     setProcessed(0);
 
-    const processBatch = async (batch: FileSystemFileHandle[]) => {
-      const batchTags: any[] = [];
-      const batchErrors: string[] = [];
+    const fileIterator = findFilesRecursively(directory);
 
+    for await (const fileHandle of fileIterator) {
+      if (scanCancelledRef.current) break;
+      totalFilesFound++;
+
+      let success = false;
       if (library === 'jsmediatags') {
-        await Promise.all(batch.map(async (fileHandle) => {
-          const file = await fileHandle.getFile();
-          return new Promise<void>((resolve) => {
-            jsmediatags.read(file, {
-              onSuccess: (tag) => {
-                batchTags.push(tag.tags);
-                resolve();
-              },
-              onError: (e) => {
-                batchErrors.push(`${fileHandle.name}: ${e.type} - ${e.info}`);
-                resolve(); // Don't reject, just record the error and continue
-              },
-            });
+        const file = await fileHandle.getFile();
+        success = await new Promise<boolean>((resolve) => {
+          jsmediatags.read(file, {
+            onSuccess: (tag) => {
+              localTags.push(tag.tags);
+              resolve(true);
+            },
+            onError: (e) => {
+              localErrors.push(`${fileHandle.name}: ${e.type} - ${e.info}`);
+              resolve(false);
+            },
           });
-        }));
+        });
       } else if (library === 'ffmpeg.wasm') {
         if (!isFFmpegLoaded || !ffmpegRef.current) throw new Error('ffmpeg.wasm is not loaded.');
         const ffmpeg = ffmpegRef.current;
-        for (const fileHandle of batch) {
-          try {
-            const file = await fileHandle.getFile();
-            const arrayBuffer = await file.arrayBuffer();
-            const data = new Uint8Array(arrayBuffer);
-            await ffmpeg.writeFile(file.name, data);
-            await ffmpeg.exec(['-i', file.name, '-f', 'ffmetadata', 'metadata.txt']);
-            const metadataOutput = await ffmpeg.readFile('metadata.txt');
-            const tags: { [key: string]: string } = {};
-            const decoder = new TextDecoder('utf-8');
-            decoder.decode(metadataOutput as Uint8Array).split('\n').forEach(line => {
-              const [key, ...value] = line.split('=');
-              if (key && value.length > 0) tags[key.trim()] = value.join('=').trim();
-            });
-            batchTags.push(tags);
-          } catch (e) {
-            const errorMessage = e instanceof Error ? e.message : String(e);
-            batchErrors.push(`${fileHandle.name}: ${errorMessage}`);
-          }
+        try {
+          const file = await fileHandle.getFile();
+          const arrayBuffer = await file.arrayBuffer();
+          const data = new Uint8Array(arrayBuffer);
+          await ffmpeg.writeFile(file.name, data);
+          await ffmpeg.exec(['-i', file.name, '-f', 'ffmetadata', 'metadata.txt']);
+          const metadataOutput = await ffmpeg.readFile('metadata.txt');
+          const tags: { [key: string]: string } = {};
+          const decoder = new TextDecoder('utf-8');
+          decoder.decode(metadataOutput as Uint8Array).split('\n').forEach(line => {
+            const [key, ...value] = line.split('=');
+            if (key && value.length > 0) tags[key.trim()] = value.join('=').trim();
+          });
+          localTags.push(tags);
+          success = true;
+        } catch (e) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          localErrors.push(`${fileHandle.name}: ${errorMessage}`);
         }
       } else if (library === 'id3-wasm') {
         if (!isId3WasmLoaded) throw new Error('id3-wasm is not loaded.');
-        for (const fileHandle of batch) {
-          if (!fileHandle.name.toLowerCase().endsWith('.mp3')) continue;
-          const file = await fileHandle.getFile();
-          const arrayBuffer = await file.arrayBuffer();
-          const uint8Array = new Uint8Array(arrayBuffer);
-          let tagController;
-          let metadata;
-          try {
-            tagController = TagController.from(uint8Array);
-            metadata = tagController.getMetadata();
-            batchTags.push({
-              title: metadata.title, artist: metadata.artist, album: metadata.album,
-              year: metadata.year, track: (metadata as any).track, genre: (metadata as any).genre,
-            });
-          } catch (e) {
-            const errorMessage = e instanceof Error ? e.message : String(e);
-            batchErrors.push(`${fileHandle.name}: ${errorMessage}`);
-          } finally {
-            if (metadata) metadata.free();
-            if (tagController) tagController.free();
-          }
+        if (!fileHandle.name.toLowerCase().endsWith('.mp3')) continue;
+        const file = await fileHandle.getFile();
+        const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        let tagController;
+        let metadata;
+        try {
+          tagController = TagController.from(uint8Array);
+          metadata = tagController.getMetadata();
+          localTags.push({
+            title: metadata.title, artist: metadata.artist, album: metadata.album,
+            year: metadata.year, track: (metadata as any).track, genre: (metadata as any).genre,
+          });
+          success = true;
+        } catch (e) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          localErrors.push(`${fileHandle.name}: ${errorMessage}`);
+        } finally {
+          if (metadata) metadata.free();
+          if (tagController) tagController.free();
         }
       }
 
-      totalFilesProcessed += batch.length;
-      setProcessed(totalFilesProcessed);
-      setTags(currentTags => [...batchTags, ...currentTags]);
-      setErrors(currentErrors => [...currentErrors, ...batchErrors]);
+      if (success) {
+        totalFilesProcessed++;
+        setProcessed(totalFilesProcessed);
+      }
 
       const intermediateTime = performance.now();
       setResults([{ library, filesProcessed: totalFilesProcessed, timeTaken: intermediateTime - startTime }]);
-      setStatus(`Processing... Processed: ${totalFilesProcessed}`);
-    };
+      setStatus(`Processing... Processed ${totalFilesProcessed} of ${totalFilesFound} files found.`);
+    }
 
-    try {
-      await traverseAndProcess(directory, batchSize, processBatch, false);
+    const endTime = performance.now();
+    setResults([{ library, filesProcessed: totalFilesProcessed, timeTaken: endTime - startTime }]);
+    setTags(localTags);
+    setErrors(localErrors);
 
-      const endTime = performance.now();
-      setResults([{ library, filesProcessed: totalFilesProcessed, timeTaken: endTime - startTime }]);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setStatus(`Error during testing ${library}: ${errorMessage}`);
-      console.error(error);
-      const endTime = performance.now();
-      setResults(prev => [{ library: prev[0]?.library || library, filesProcessed: totalFilesProcessed, timeTaken: endTime - startTime }]);
+    if (scanCancelledRef.current) {
+      setStatus(`Scan stopped. Processed ${totalFilesProcessed} of ${totalFilesFound} files in ${(endTime - startTime) / 1000} seconds.`);
+    } else {
+      setStatus(`Scan complete. Processed ${totalFilesProcessed} of ${totalFilesFound} files in ${(endTime - startTime) / 1000} seconds.`);
     }
   };
 
@@ -236,81 +207,87 @@ const TestPage = () => {
     setTags([]);
     setStatus(`Testing ${library} in parallel...`);
     const startTime = performance.now();
+    let totalFilesProcessed = 0;
+    let totalFilesFound = 0;
+    const localTags: any[] = [];
+    const localErrors: string[] = [];
 
     setProcessed(0);
 
-    const processBatch = async (batch: FileSystemFileHandle[]) => {
-      const numWorkers = navigator.hardwareConcurrency || 4;
-      const promises: Promise<{ results: any[], errors: string[] }>[] = [];
-      const filesPerWorker = Math.ceil(batch.length / numWorkers);
+    const numWorkers = Math.max(1, (navigator.hardwareConcurrency || 2) - 1);
+    const workers: Worker[] = [];
+    const fileIterator = findFilesRecursively(directory);
+
+    await new Promise<void>((resolve) => {
+      let activeWorkers = 0;
+      let iteratorDone = false;
+
+      const onDone = () => {
+        if (iteratorDone && activeWorkers === 0) {
+          resolve();
+        }
+      };
+
+      const processNextFile = async (worker: Worker) => {
+        if (scanCancelledRef.current) {
+          onDone();
+          return;
+        }
+
+        const next = await fileIterator.next();
+        if (next.done) {
+          iteratorDone = true;
+          onDone();
+          return;
+        }
+
+        totalFilesFound++;
+        activeWorkers++;
+        const file = await next.value.getFile();
+        worker.postMessage({ files: [file], library });
+      };
 
       for (let i = 0; i < numWorkers; i++) {
         const worker = new Worker(new URL('../workers/metadata-worker.ts', import.meta.url), { type: 'module' });
+        workers.push(worker);
 
-        const start = i * filesPerWorker;
-        const end = start + filesPerWorker;
-        const chunk = batch.slice(start, end);
+        worker.onmessage = (event) => {
+          if (scanCancelledRef.current) {
+            onDone();
+            return;
+          }
+          const { results, errors } = event.data;
+          totalFilesProcessed++;
+          activeWorkers--;
+          setProcessed(p => p + 1);
+          localTags.push(...results);
+          localErrors.push(...errors);
 
-        if (chunk.length > 0) {
-          const promise = new Promise<{ results: any[], errors: string[] }>((resolve, reject) => {
-            worker.onmessage = (event) => {
-              if (event.data.error) reject(new Error(event.data.error));
-              else resolve(event.data);
-              worker.terminate();
-            };
-            worker.onerror = (error) => {
-              reject(error);
-              worker.terminate();
-            };
-            Promise.all(chunk.map(handle => handle.getFile())).then(fileObjects => {
-              worker.postMessage({ files: fileObjects, library });
-            });
-          });
-          promises.push(promise);
-        }
+          const intermediateTime = performance.now();
+          setResults([{ library: `${library} (Parallel)`, filesProcessed: totalFilesProcessed, timeTaken: intermediateTime - startTime }]);
+          setStatus(`Processing... Processed ${totalFilesProcessed} of ${totalFilesFound} files found.`);
+          processNextFile(worker);
+        };
+        worker.onerror = (error) => {
+          console.error('Worker error:', error);
+          activeWorkers--;
+          processNextFile(worker);
+        };
+        processNextFile(worker);
       }
+    });
 
-      const allResults = await Promise.all(promises);
-      const combinedResults = allResults.flatMap(r => r.results);
-      const combinedErrors = allResults.flatMap(r => r.errors);
-      const successfullyProcessedInBatch = combinedResults.length;
+    workers.forEach(worker => worker.terminate());
 
-      setProcessed(currentCount => currentCount + successfullyProcessedInBatch);
-      setTags(currentTags => [...combinedResults, ...currentTags]);
-      setErrors(currentErrors => [...currentErrors, ...combinedErrors]);
+    const endTime = performance.now();
+    setResults([{ library: `${library} (Parallel)`, filesProcessed: totalFilesProcessed, timeTaken: endTime - startTime }]);
+    setTags(localTags);
+    setErrors(localErrors);
 
-      const intermediateTime = performance.now();
-
-      setResults(prev => {
-        const newTotalProcessed = (prev[0]?.filesProcessed || 0) + successfullyProcessedInBatch;
-        return [{ library: `${library} (Parallel)`, filesProcessed: newTotalProcessed, timeTaken: intermediateTime - startTime }];
-      });
-
-      setStatus(prevStatus => {
-        const currentProcessedMatch = prevStatus.match(/Processed: (\d+)/);
-        const currentProcessed = currentProcessedMatch ? parseInt(currentProcessedMatch[1], 10) : 0;
-        const newTotal = currentProcessed + successfullyProcessedInBatch;
-        return `Processing... Processed: ${newTotal}`;
-      });
-    };
-
-    try {
-      await traverseAndProcess(directory, batchSize, processBatch, false);
-
-      const endTime = performance.now();
-
-      setResults(prev => {
-        const finalProcessed = prev[0]?.filesProcessed || 0;
-        return [{ library: `${library} (Parallel)`, filesProcessed: finalProcessed, timeTaken: endTime - startTime }];
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      setStatus(`Error during parallel testing: ${errorMessage}`);
-      const endTime = performance.now();
-      setResults(prev => {
-        const finalProcessed = prev[0]?.filesProcessed || 0;
-        return [{ library: `${library} (Parallel)`, filesProcessed: finalProcessed, timeTaken: endTime - startTime }];
-      });
+    if (scanCancelledRef.current) {
+      setStatus(`Scan stopped. Processed ${totalFilesProcessed} of ${totalFilesFound} files in ${(endTime - startTime) / 1000} seconds.`);
+    } else {
+      setStatus(`Scan complete. Processed ${totalFilesProcessed} of ${totalFilesFound} files in ${(endTime - startTime) / 1000} seconds.`);
     }
   };
 
@@ -318,6 +295,7 @@ const TestPage = () => {
     if (!directory) return;
 
     setIsScanning(true);
+    scanCancelledRef.current = false;
     resetScanProgress();
     setFound(0);
     setProcessed(0);
@@ -388,6 +366,16 @@ const TestPage = () => {
         >
           {isScanning ? 'Scanning...' : 'Run Test'}
         </button>
+        {isScanning && (
+          <button
+            onClick={() => {
+              scanCancelledRef.current = true;
+            }}
+            className={styles.stopButton}
+          >
+            Stop
+          </button>
+        )}
       </div>
 
       {status && <p>{status}</p>}
